@@ -2,6 +2,7 @@
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import jsQR from "jsqr";
 
 export default function ScannerPage() {
   const { data: session, status } = useSession();
@@ -14,9 +15,11 @@ export default function ScannerPage() {
   const [lastResult, setLastResult] = useState(null);
   const [gateId, setGateId] = useState("GATE_A1");
   const [deviceId, setDeviceId] = useState("");
+  const [scanningStatus, setScanningStatus] = useState(""); // idle, scanning, found, error
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const scanIntervalRef = useRef(null);
 
   // Generate device ID on mount
   useEffect(() => {
@@ -51,10 +54,15 @@ export default function ScannerPage() {
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        setCameraActive(true);
-        // Start scanning
-        scanQRCode();
+        videoRef.current.addEventListener('loadedmetadata', () => {
+          videoRef.current.play();
+          setCameraActive(true);
+          setScanningStatus("scanning");
+          // Start QR scanning after video is ready
+          setTimeout(() => {
+            startScanning();
+          }, 500);
+        });
       }
     } catch (error) {
       console.error("Camera error:", error);
@@ -64,11 +72,17 @@ export default function ScannerPage() {
   };
 
   const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    
     if (videoRef.current?.srcObject) {
       const tracks = videoRef.current.srcObject.getTracks();
       tracks.forEach(track => track.stop());
       videoRef.current.srcObject = null;
       setCameraActive(false);
+      setScanningStatus("");
     }
   };
 
@@ -79,30 +93,76 @@ export default function ScannerPage() {
     const video = videoRef.current;
     const context = canvas.getContext("2d");
 
+    // Make sure video is ready
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      return;
+    }
+
     // Set canvas size to match video
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
+    if (canvas.width === 0 || canvas.height === 0) {
+      return;
+    }
+
     // Draw current video frame to canvas
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Try to decode QR code
+    // Get image data for QR detection
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    
     try {
-      // This is a simplified approach - in production you'd use a QR library like jsQR
-      // For now, we'll implement manual scanning
-      setTimeout(() => {
-        if (cameraActive) {
-          scanQRCode();
+      // Use jsQR to detect QR code
+      const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "dontInvert",
+      });
+
+      if (qrCode) {
+        console.log('[SCANNER] QR Code detected:', qrCode.data);
+        setScanningStatus("found");
+        
+        // Stop scanning temporarily to prevent multiple detections
+        if (scanIntervalRef.current) {
+          clearInterval(scanIntervalRef.current);
+          scanIntervalRef.current = null;
         }
-      }, 100);
+        
+        // Process the QR code data
+        try {
+          const qrData = JSON.parse(qrCode.data);
+          verifyQRCode(qrData);
+        } catch (parseError) {
+          console.error('[SCANNER] Failed to parse QR data:', parseError);
+          setLastResult({
+            valid: false,
+            error: "QR code format tidak valid"
+          });
+          // Resume scanning after error
+          setTimeout(() => {
+            if (cameraActive) {
+              startScanning();
+            }
+          }, 2000);
+        }
+      } else {
+        setScanningStatus("scanning");
+      }
     } catch (error) {
-      // Continue scanning
-      setTimeout(() => {
-        if (cameraActive) {
-          scanQRCode();
-        }
-      }, 100);
+      console.error('[SCANNER] QR detection error:', error);
+      setScanningStatus("error");
     }
+  };
+
+  const startScanning = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+    }
+    
+    setScanningStatus("scanning");
+    scanIntervalRef.current = setInterval(() => {
+      scanQRCode();
+    }, 100); // Scan every 100ms
   };
 
   const verifyQRCode = async (qrData) => {
@@ -127,9 +187,21 @@ export default function ScannerPage() {
       if (result.valid) {
         // Success feedback
         navigator.vibrate && navigator.vibrate([100, 50, 100]);
+        // Resume scanning after 3 seconds
+        setTimeout(() => {
+          if (cameraActive) {
+            startScanning();
+          }
+        }, 3000);
       } else {
         // Error feedback
         navigator.vibrate && navigator.vibrate([200, 100, 200, 100, 200]);
+        // Resume scanning after error display
+        setTimeout(() => {
+          if (cameraActive) {
+            startScanning();
+          }
+        }, 2000);
       }
 
     } catch (error) {
@@ -282,7 +354,46 @@ export default function ScannerPage() {
               
               {/* Scan overlay */}
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-48 h-48 border-2 border-white border-dashed rounded-lg"></div>
+                <div className={`w-48 h-48 border-2 border-dashed rounded-lg transition-colors ${
+                  scanningStatus === "found" ? "border-green-400" :
+                  scanningStatus === "error" ? "border-red-400" :
+                  scanningStatus === "scanning" ? "border-blue-400 animate-pulse" :
+                  "border-white"
+                }`}>
+                  {/* Scanning corners */}
+                  <div className="relative w-full h-full">
+                    <div className={`absolute top-0 left-0 w-6 h-6 border-l-4 border-t-4 ${
+                      scanningStatus === "found" ? "border-green-400" :
+                      scanningStatus === "error" ? "border-red-400" :
+                      "border-white"
+                    }`}></div>
+                    <div className={`absolute top-0 right-0 w-6 h-6 border-r-4 border-t-4 ${
+                      scanningStatus === "found" ? "border-green-400" :
+                      scanningStatus === "error" ? "border-red-400" :
+                      "border-white"
+                    }`}></div>
+                    <div className={`absolute bottom-0 left-0 w-6 h-6 border-l-4 border-b-4 ${
+                      scanningStatus === "found" ? "border-green-400" :
+                      scanningStatus === "error" ? "border-red-400" :
+                      "border-white"
+                    }`}></div>
+                    <div className={`absolute bottom-0 right-0 w-6 h-6 border-r-4 border-b-4 ${
+                      scanningStatus === "found" ? "border-green-400" :
+                      scanningStatus === "error" ? "border-red-400" :
+                      "border-white"
+                    }`}></div>
+                    
+                    {/* Status text */}
+                    <div className="absolute inset-0 flex items-end justify-center pb-4">
+                      <span className="text-white text-sm bg-black/50 px-2 py-1 rounded">
+                        {scanningStatus === "scanning" && "🔍 Scanning..."}
+                        {scanningStatus === "found" && "✅ QR Found!"}
+                        {scanningStatus === "error" && "❌ Error"}
+                        {!scanningStatus && "📱 Position QR Code"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Camera controls */}

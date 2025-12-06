@@ -234,5 +234,55 @@ Rencana Tahap Berikutnya (opsi)
 - Backward compatible update tanpa breaking changes
 - Vercel deployment fix untuk menghilangkan security warnings
 
+17) Bug Fix - Upload Bukti Pembayaran Error 500
+- Debug dan perbaikan API /api/orders/[id]/upload-proof untuk mengatasi error 500 saat upload file
+- Comprehensive debugging system:
+  - Detailed logging dengan [UPLOAD-DEBUG] tracking di setiap step proses upload
+  - Session validation, user verification, order status checking
+  - File processing details (name, size, type, path)
+  - Database update confirmation dan error tracking
+- Vercel-compatible file storage solution:
+  - Development: File system storage ke public/uploads/payment-proofs/
+  - Production/Vercel: Base64 storage dalam database (karena read-only filesystem)
+  - Automatic fallback mechanism jika file write gagal
+- Enhanced error handling:
+  - Stack trace logging untuk production debugging
+  - Detailed error messages dengan development info
+  - Graceful fallback dari filesystem ke base64 storage
+- Directory management:
+  - Automatic directory creation dengan recursive: true
+  - .gitkeep file untuk memastikan struktur direktori tersimpan di git
+- File validation improvements:
+  - Better file extension handling dengan fallback ke 'jpg'
+  - Enhanced MIME type validation dan size checking
+
+18) Enhanced QR Code Scanner - Real Detection Implementation
+- Integrasi jsQR library untuk deteksi QR code yang sesungguhnya di web scanner
+- Real QR code detection system:
+  - jsQR library integration untuk processing image data dari video canvas
+  - 100ms scanning interval untuk responsiveness optimal
+  - JSON parsing untuk memproses QR code data UBERNOIZE yang ter-sign
+  - Image data processing dengan validasi canvas dan video readiness
+- Visual feedback system yang comprehensive:
+  - Dynamic scan overlay dengan color-coded status (blue=scanning, green=found, red=error)
+  - Corner indicators yang berubah warna sesuai status scanning
+  - Status text real-time dengan emoji indicators (🔍🟢🔴)
+  - Smooth CSS transitions dan pulse animations untuk visual cues
+- Smart scanning logic dan lifecycle management:
+  - Video readiness check sebelum memulai scanning process
+  - Canvas size validation untuk memastikan proper image capture
+  - Multiple detection prevention dengan temporary scan pause
+  - Auto-resume scanning setelah verifikasi atau error (2-3 detik delay)
+- Enhanced user experience:
+  - Haptic feedback dengan device vibration untuk success/error states
+  - Automatic scan restart setelah hasil verification ditampilkan
+  - Error handling dengan graceful fallbacks dan user-friendly messages
+  - Mobile-optimized scanning interface untuk crew tablets/smartphones
+- Technical improvements:
+  - Proper cleanup dengan clearInterval untuk scan intervals
+  - Memory management dengan ref cleanup saat component unmount
+  - Event listener management untuk video metadata loading
+  - Console logging untuk debugging scan detection process
+
 Disiapkan oleh: Rovo Dev (Agent)
 Tanggal: [isi sesuai tanggal run]
