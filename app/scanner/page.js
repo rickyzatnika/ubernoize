@@ -44,6 +44,7 @@ export default function ScannerPage() {
   // Camera functions
   const startCamera = async () => {
     try {
+      console.log('[CAMERA] Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: "environment", // Use back camera on mobile
@@ -51,17 +52,26 @@ export default function ScannerPage() {
           height: { ideal: 720 }
         }
       });
+      console.log('[CAMERA] Camera access granted, stream:', stream);
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        console.log('[CAMERA] Video element found, setting up...');
+        
         videoRef.current.addEventListener('loadedmetadata', () => {
+          console.log('[CAMERA] Video metadata loaded, dimensions:', videoRef.current.videoWidth, 'x', videoRef.current.videoHeight);
           videoRef.current.play();
           setCameraActive(true);
           setScanningStatus("scanning");
           // Start QR scanning after video is ready
           setTimeout(() => {
+            console.log('[CAMERA] Starting QR scanning...');
             startScanning();
           }, 500);
+        });
+        
+        videoRef.current.addEventListener('error', (e) => {
+          console.error('[CAMERA] Video error:', e);
         });
       }
     } catch (error) {
@@ -87,7 +97,10 @@ export default function ScannerPage() {
   };
 
   const scanQRCode = () => {
-    if (!videoRef.current || !canvasRef.current || !cameraActive) return;
+    if (!videoRef.current || !canvasRef.current || !cameraActive) {
+      console.log('[SCANNER] Scan skipped - missing refs or camera inactive');
+      return;
+    }
 
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -95,6 +108,7 @@ export default function ScannerPage() {
 
     // Make sure video is ready
     if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      console.log('[SCANNER] Video not ready, readyState:', video.readyState);
       return;
     }
 
@@ -103,6 +117,7 @@ export default function ScannerPage() {
     canvas.height = video.videoHeight;
 
     if (canvas.width === 0 || canvas.height === 0) {
+      console.log('[SCANNER] Invalid canvas dimensions:', canvas.width, 'x', canvas.height);
       return;
     }
 
@@ -119,7 +134,9 @@ export default function ScannerPage() {
       });
 
       if (qrCode) {
-        console.log('[SCANNER] QR Code detected:', qrCode.data);
+        console.log('[SCANNER] ✅ QR Code detected!');
+        console.log('[SCANNER] QR Data:', qrCode.data);
+        console.log('[SCANNER] QR Location:', qrCode.location);
         setScanningStatus("found");
         
         // Stop scanning temporarily to prevent multiple detections
@@ -131,21 +148,27 @@ export default function ScannerPage() {
         // Process the QR code data
         try {
           const qrData = JSON.parse(qrCode.data);
+          console.log('[SCANNER] Parsed QR data:', qrData);
           verifyQRCode(qrData);
         } catch (parseError) {
           console.error('[SCANNER] Failed to parse QR data:', parseError);
+          console.log('[SCANNER] Raw QR data was:', qrCode.data);
+          
+          // Try to handle it as raw string (for testing)
           setLastResult({
             valid: false,
-            error: "QR code format tidak valid"
+            error: `QR detected but invalid format: ${qrCode.data.substring(0, 50)}...`
           });
+          
           // Resume scanning after error
           setTimeout(() => {
             if (cameraActive) {
               startScanning();
             }
-          }, 2000);
+          }, 3000);
         }
       } else {
+        // No QR code found in this frame
         setScanningStatus("scanning");
       }
     } catch (error) {
@@ -159,10 +182,34 @@ export default function ScannerPage() {
       clearInterval(scanIntervalRef.current);
     }
     
+    console.log('[SCANNER] Starting scan interval...');
     setScanningStatus("scanning");
     scanIntervalRef.current = setInterval(() => {
       scanQRCode();
-    }, 100); // Scan every 100ms
+    }, 200); // Scan every 200ms (reduced frequency for stability)
+    
+    // Also do an immediate scan
+    setTimeout(() => scanQRCode(), 100);
+  };
+
+  // Test function to simulate QR detection
+  const testQRDetection = () => {
+    console.log('[TEST] Simulating QR detection...');
+    const testData = {
+      orderId: "test123",
+      eventId: "testEvent",
+      userId: "testUser"
+    };
+    setLastResult({
+      valid: true,
+      message: "Test QR code detected successfully",
+      ticket: {
+        customerName: "Test Customer",
+        eventName: "Test Event",
+        ticketTypes: [{type: "Test", quantity: 1}],
+        totalAmount: 50000
+      }
+    });
   };
 
   const verifyQRCode = async (qrData) => {
@@ -392,12 +439,17 @@ export default function ScannerPage() {
                         {!scanningStatus && "📱 Position QR Code"}
                       </span>
                     </div>
+                    
+                    {/* Debug info */}
+                    <div className="absolute top-0 left-0 text-white text-xs bg-black/50 px-2 py-1 rounded">
+                      {videoRef.current ? `${Math.floor(videoRef.current.videoWidth)}x${Math.floor(videoRef.current.videoHeight)}` : "No video"}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Camera controls */}
-              <div className="absolute bottom-4 left-4 right-4 flex justify-center gap-4">
+              <div className="absolute bottom-4 left-4 right-4 flex justify-center gap-2">
                 {!cameraActive ? (
                   <button
                     onClick={startCamera}
@@ -406,12 +458,20 @@ export default function ScannerPage() {
                     📷 Start Camera
                   </button>
                 ) : (
-                  <button
-                    onClick={stopCamera}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    ⏹️ Stop Camera
-                  </button>
+                  <>
+                    <button
+                      onClick={stopCamera}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                    >
+                      ⏹️ Stop Camera
+                    </button>
+                    <button
+                      onClick={testQRDetection}
+                      className="px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm"
+                    >
+                      🧪 Test
+                    </button>
+                  </>
                 )}
               </div>
             </div>
