@@ -23,7 +23,11 @@ export default function Navbar() {
             <>
               <Link href="/profile" className="text-gray-700 hover:text-black">Profile</Link>
               {session.user?.role === "admin" && (
-                <Link href="/admin" className="text-gray-700 hover:text-black">Admin</Link>
+                <>
+                  <Link href="/admin" className="text-gray-700 hover:text-black">Admin</Link>
+                  <Link href="/admin/dashboard" className="text-gray-700 hover:text-black">📊 Dashboard</Link>
+                  <Link href="/scanner" className="text-gray-700 hover:text-black">📱 Scanner</Link>
+                </>
               )}
               <button onClick={() => signOut({ callbackUrl: "/" })} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">Sign Out</button>
             </>

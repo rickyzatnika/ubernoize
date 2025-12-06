@@ -23,7 +23,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { verificationCode, orderId, eventId } = body;
+    const { verificationCode, orderId, eventId, gateId, deviceId, crewId, scanTime } = body;
 
     if (!verificationCode) {
       return NextResponse.json({ error: "Verification code is required" }, { status: 400 });
@@ -90,8 +90,31 @@ export async function POST(req) {
       });
     }
 
-    // Log successful verification
-    console.log(`Manual verification successful: Order ${order._id} by crew ${session.user.email}`);
+    // Log successful verification with tracking data
+    const auditLog = {
+      orderId: order._id,
+      eventId: order.eventId._id,
+      eventName: order.eventId.name,
+      crewEmail: session.user.email,
+      crewId: crewId || session.user.email,
+      gateId: gateId || 'UNKNOWN',
+      deviceId: deviceId || 'UNKNOWN',
+      scanTime: scanTime || new Date().toISOString(),
+      verificationResult: 'VALID',
+      verificationMethod: 'MANUAL',
+      customerEmail: order.userId.email,
+      customerName: order.userId.name || order.userId.email,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log(`[GATE-SCAN-MANUAL] ${JSON.stringify(auditLog)}`);
+    
+    // Send to dashboard logs (fire and forget)
+    fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/admin/scan-logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(auditLog)
+    }).catch(err => console.error('Failed to log scan:', err));
 
     return NextResponse.json({
       valid: true,
@@ -109,9 +132,14 @@ export async function POST(req) {
         })),
         totalAmount: order.total,
         approvedAt: order.updatedAt,
-        verifiedAt: new Date().toISOString(),
+        verifiedAt: scanTime || new Date().toISOString(),
         verifiedBy: session.user.email,
-        verificationMethod: "manual"
+        verificationMethod: "manual",
+        gateInfo: {
+          gateId: gateId || 'UNKNOWN',
+          deviceId: deviceId || 'UNKNOWN',
+          crewId: crewId || session.user.email
+        }
       }
     });
 

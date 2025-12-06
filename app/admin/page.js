@@ -2,6 +2,7 @@
 import { useSession } from "next-auth/react";
 import useSWR from "swr";
 import { useState } from "react";
+import Link from "next/link";
 
 const fetcher = (url) => fetch(url).then((r) => r.json());
 
@@ -82,6 +83,21 @@ export default function AdminPage() {
 
       {/* Filter */}
       <div className="mb-6">
+        <div className="flex gap-2 flex-wrap mb-4">
+          <Link 
+            href="/admin/dashboard" 
+            className="px-4 py-2 bg-green-600 text-white rounded text-sm font-medium hover:bg-green-700"
+          >
+            📊 Gate Dashboard
+          </Link>
+          <Link 
+            href="/scanner" 
+            className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700"
+          >
+            📱 Scanner
+          </Link>
+        </div>
+        
         <div className="flex gap-2 flex-wrap">
           {[
             { key: "paid", label: "Perlu Review" },

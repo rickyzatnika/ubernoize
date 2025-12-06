@@ -23,7 +23,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { qrData } = body;
+    const { qrData, gateId, deviceId, crewId, scanTime } = body;
 
     if (!qrData) {
       return NextResponse.json({ error: "QR data is required" }, { status: 400 });
@@ -44,6 +44,29 @@ export async function POST(req) {
     const verification = verifyQRSignature(parsedQRData);
     
     if (!verification.valid) {
+      // Log failed verification
+      const failedLog = {
+        orderId: 'UNKNOWN',
+        eventId: 'UNKNOWN', 
+        crewEmail: session.user.email,
+        crewId: crewId || session.user.email,
+        gateId: gateId || 'UNKNOWN',
+        deviceId: deviceId || 'UNKNOWN',
+        scanTime: scanTime || new Date().toISOString(),
+        verificationResult: 'INVALID',
+        errorReason: verification.error,
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log(`[GATE-SCAN-FAILED] ${JSON.stringify(failedLog)}`);
+      
+      // Send to dashboard logs
+      fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/admin/scan-logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(failedLog)
+      }).catch(err => console.error('Failed to log scan:', err));
+      
       return NextResponse.json({
         valid: false,
         error: verification.error,
@@ -89,8 +112,30 @@ export async function POST(req) {
     // Check if ticket has already been used (optional - if you track usage)
     // You could add a 'usedAt' field to Order model and check here
 
-    // Log successful verification for audit
-    console.log(`Ticket verified successfully: Order ${order._id} by crew ${session.user.email}`);
+    // Log successful verification for audit with tracking data
+    const auditLog = {
+      orderId: order._id,
+      eventId: order.eventId._id,
+      eventName: order.eventId.name,
+      crewEmail: session.user.email,
+      crewId: crewId || session.user.email,
+      gateId: gateId || 'UNKNOWN',
+      deviceId: deviceId || 'UNKNOWN',
+      scanTime: scanTime || new Date().toISOString(),
+      verificationResult: 'VALID',
+      customerEmail: order.userId.email,
+      customerName: order.userId.name || order.userId.email,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log(`[GATE-SCAN] ${JSON.stringify(auditLog)}`);
+    
+    // Send to dashboard logs (fire and forget)
+    fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/admin/scan-logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(auditLog)
+    }).catch(err => console.error('Failed to log scan:', err));
 
     // Return success with ticket details
     return NextResponse.json({
@@ -109,8 +154,13 @@ export async function POST(req) {
         })),
         totalAmount: order.total,
         approvedAt: order.updatedAt,
-        verifiedAt: new Date().toISOString(),
-        verifiedBy: session.user.email
+        verifiedAt: scanTime || new Date().toISOString(),
+        verifiedBy: session.user.email,
+        gateInfo: {
+          gateId: gateId || 'UNKNOWN',
+          deviceId: deviceId || 'UNKNOWN',
+          crewId: crewId || session.user.email
+        }
       }
     });
 
