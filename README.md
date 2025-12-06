@@ -1,24 +1,50 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-## Getting Started
+## Quickstart (Auth + MongoDB + Landing Events)
 
-First, run the development server:
+1) Copy env file
+```
+cp .env.example .env.local
+```
+Isi MONGODB_URI, NEXTAUTH_SECRET, dan Google OAuth (opsional).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+2) Install dependencies
+```
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3) Jalankan MongoDB lokal (contoh)
+```
+# pastikan mongod berjalan di localhost:27017
+```
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+4) Seed data (users, 1 event, ticket types)
+```
+# Jalankan dev, lalu POST ke endpoint seed
+npm run dev
+# Di terminal lain:
+curl -X POST http://localhost:3000/api/dev/seed
+```
+Akun demo:
+- admin@ubernoize.local / admin123 (role: admin)
+- user@ubernoize.local / user123 (role: user)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+5) Jalankan dev server
+```
+npm run dev
+```
+
+Buka:
+- Landing: http://localhost:3000 (event listing dari MongoDB via SWR)
+- Sign in: http://localhost:3000/signin (Credentials/Google)
+- Profile: http://localhost:3000/profile (protected)
+- Admin: http://localhost:3000/admin (role admin)
+
+Catatan teknis:
+- Database: MongoDB (Mongoose)
+- Auth: NextAuth (Credentials + Google), session JWT
+- Data fetch: SWR + refreshInterval (tanpa WebSocket), gunakan mutate untuk optimistic UI
+- API: /api/events untuk listing event beserta ticket types
 
 ## Learn More
 
