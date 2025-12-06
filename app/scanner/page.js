@@ -170,6 +170,11 @@ export default function ScannerPage() {
       } else {
         // No QR code found in this frame
         setScanningStatus("scanning");
+        
+        // Log scanning attempts every 50 frames (10 seconds at 200ms intervals)
+        if (Math.random() < 0.02) { // 2% chance to log
+          console.log('[SCANNER] Still scanning... Video ready:', video.readyState === video.HAVE_ENOUGH_DATA);
+        }
       }
     } catch (error) {
       console.error('[SCANNER] QR detection error:', error);
@@ -471,17 +476,63 @@ export default function ScannerPage() {
                     >
                       🧪 Test
                     </button>
+                    <button
+                      onClick={() => {
+                        // Capture current frame and log it
+                        if (videoRef.current && canvasRef.current) {
+                          const canvas = canvasRef.current;
+                          const video = videoRef.current;
+                          const context = canvas.getContext("2d");
+                          
+                          canvas.width = video.videoWidth;
+                          canvas.height = video.videoHeight;
+                          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                          
+                          // Convert to data URL for inspection
+                          const dataURL = canvas.toDataURL('image/png');
+                          console.log('[DEBUG] Captured frame data URL length:', dataURL.length);
+                          console.log('[DEBUG] You can copy this URL to browser to see captured image');
+                          console.log('[DEBUG] Frame data URL:', dataURL.substring(0, 100) + '...');
+                          
+                          // Try to detect QR in this frame manually
+                          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                          try {
+                            const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+                            console.log('[DEBUG] Manual QR detection result:', qrCode ? 'FOUND' : 'NOT FOUND');
+                            if (qrCode) {
+                              console.log('[DEBUG] QR Data:', qrCode.data);
+                            }
+                          } catch (e) {
+                            console.error('[DEBUG] Manual QR detection error:', e);
+                          }
+                        }
+                      }}
+                      className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+                    >
+                      📸 Capture
+                    </button>
                   </>
                 )}
               </div>
             </div>
 
-            <p className="text-sm text-gray-600 text-center">
-              {cameraActive 
-                ? "Arahkan kamera ke QR code tiket"
-                : "Tekan tombol untuk mengaktifkan kamera"
-              }
-            </p>
+            <div className="space-y-2 text-center">
+              <p className="text-sm text-gray-600">
+                {cameraActive 
+                  ? "Arahkan kamera ke QR code tiket"
+                  : "Tekan tombol untuk mengaktifkan kamera"
+                }
+              </p>
+              {cameraActive && (
+                <div className="text-xs text-gray-500 space-y-1">
+                  <p>Debug Info:</p>
+                  <p>Video: {videoRef.current?.videoWidth || 0}x{videoRef.current?.videoHeight || 0}</p>
+                  <p>Ready State: {videoRef.current?.readyState || 'N/A'}</p>
+                  <p>Scanning: {scanningStatus || 'idle'}</p>
+                  <p>Canvas: {canvasRef.current?.width || 0}x{canvasRef.current?.height || 0}</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

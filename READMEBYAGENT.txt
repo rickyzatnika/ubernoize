@@ -284,5 +284,31 @@ Rencana Tahap Berikutnya (opsi)
   - Event listener management untuk video metadata loading
   - Console logging untuk debugging scan detection process
 
+19) QR Scanner Debug & Troubleshooting Enhancement
+- Comprehensive debugging system untuk mendiagnosis masalah QR scanner yang tidak responsif
+- Enhanced console logging dengan categorized tags:
+  - [CAMERA] logs untuk camera access, video setup, dan dimension tracking
+  - [SCANNER] logs untuk QR detection process, data parsing, dan error handling
+  - [TEST] logs untuk test simulation dan functionality verification
+- Visual debugging improvements:
+  - Real-time video dimensions display di corner scanner interface
+  - Enhanced status messages dengan detailed error information
+  - Test button (🧪 Test) untuk simulasi QR detection tanpa QR code fisik
+- Improved error handling dan validation:
+  - Raw QR data logging saat JSON parsing gagal
+  - Video readiness check dengan detailed state reporting
+  - Canvas dimension validation dengan comprehensive logging
+  - Graceful fallback untuk non-JSON QR codes dengan preview data
+- Scanner stability improvements:
+  - Reduced scan interval dari 100ms ke 200ms untuk better stability
+  - Enhanced video metadata event handling
+  - Proper error event listeners untuk video element
+  - Memory management improvements dengan proper interval cleanup
+- Troubleshooting tools:
+  - Debug info overlay menampilkan video stream status
+  - Test simulation button untuk verify basic scanner functionality
+  - Detailed console logs untuk step-by-step debugging process
+  - Enhanced error messages dengan actionable information
+
 Disiapkan oleh: Rovo Dev (Agent)
 Tanggal: [isi sesuai tanggal run]
