@@ -196,180 +196,64 @@ export default function ScannerPage() {
     requestAnimationFrame(continuousScan);
   };
 
-  // Test function to simulate QR detection
-  const testQRDetection = () => {
-    console.log('[TEST] Simulating QR detection...');
-    const testData = {
-      orderId: "test123",
-      eventId: "testEvent",
-      userId: "testUser"
-    };
-    setLastResult({
-      valid: true,
-      message: "Test QR code detected successfully",
-      ticket: {
-        customerName: "Test Customer",
-        eventName: "Test Event",
-        ticketTypes: [{type: "Test", quantity: 1}],
-        totalAmount: 50000
-      }
-    });
-  };
-
-  // Capture function for debugging
-  const handleCapture = () => {
-    console.log('[CAPTURE] Button clicked!');
-    
-    if (!videoRef.current || !canvasRef.current) {
-      console.log('[CAPTURE] Missing refs - video:', !!videoRef.current, 'canvas:', !!canvasRef.current);
-      alert('Missing video or canvas reference');
-      return;
-    }
-
-    try {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      const context = canvas.getContext("2d");
-      
-      console.log('[CAPTURE] Video dimensions:', video.videoWidth, 'x', video.videoHeight);
-      console.log('[CAPTURE] Video ready state:', video.readyState);
-      
-      if (video.videoWidth === 0 || video.videoHeight === 0) {
-        console.log('[CAPTURE] Video has no dimensions');
-        alert('Video not ready - dimensions are 0');
-        return;
-      }
-      
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      console.log('[CAPTURE] Canvas updated with dimensions:', canvas.width, 'x', canvas.height);
-      
-      // Get image data for QR detection
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      console.log('[CAPTURE] Image data length:', imageData.data.length);
-      
-      // Try to detect QR with different settings
-      let qrFound = false;
-      const detectionSettings = [
-        { inversionAttempts: "dontInvert" },
-        { inversionAttempts: "onlyInvert" },
-        { inversionAttempts: "attemptBoth" },
-        { inversionAttempts: "attemptBoth", debug: true }
-      ];
-      
-      console.log('[CAPTURE] Trying different QR detection settings...');
-      
-      for (let i = 0; i < detectionSettings.length && !qrFound; i++) {
-        try {
-          const settings = detectionSettings[i];
-          console.log(`[CAPTURE] Attempt ${i + 1} with settings:`, settings);
-          
-          const qrCode = jsQR(imageData.data, imageData.width, imageData.height, settings);
-          
-          if (qrCode) {
-            console.log(`[CAPTURE] SUCCESS on attempt ${i + 1}! ✅`);
-            console.log('[CAPTURE] QR Data:', qrCode.data);
-            console.log('[CAPTURE] QR Location:', qrCode.location);
-            alert(`QR Code Found! (Attempt ${i + 1})\nData: ${qrCode.data.substring(0, 100)}...`);
-            qrFound = true;
-            break;
-          } else {
-            console.log(`[CAPTURE] Attempt ${i + 1}: NOT FOUND`);
-          }
-        } catch (qrError) {
-          console.error(`[CAPTURE] Attempt ${i + 1} error:`, qrError);
-        }
-      }
-      
-      if (!qrFound) {
-        // Generate frame snapshot for visual inspection
-        const dataURL = canvas.toDataURL('image/png');
-        console.log('[CAPTURE] All attempts failed. Frame captured for inspection:');
-        console.log('[CAPTURE] Frame data URL (copy to browser):', dataURL.substring(0, 100) + '...');
-        
-        // Create download link for inspection
-        const link = document.createElement('a');
-        link.download = 'scanner-frame.png';
-        link.href = dataURL;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Additional analysis
-        console.log('[CAPTURE] Image Analysis:');
-        console.log('- Canvas dimensions:', canvas.width, 'x', canvas.height);
-        console.log('- Image data length:', imageData.data.length);
-        console.log('- Bytes per pixel:', imageData.data.length / (canvas.width * canvas.height));
-        
-        // Check if image is mostly black/white (QR code should have high contrast)
-        let blackPixels = 0;
-        let whitePixels = 0;
-        const threshold = 128;
-        
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          const r = imageData.data[i];
-          const g = imageData.data[i + 1];
-          const b = imageData.data[i + 2];
-          const gray = (r + g + b) / 3;
-          
-          if (gray < threshold) blackPixels++;
-          else whitePixels++;
-        }
-        
-        const totalPixels = canvas.width * canvas.height;
-        const blackPercent = (blackPixels / totalPixels * 100).toFixed(1);
-        const whitePercent = (whitePixels / totalPixels * 100).toFixed(1);
-        
-        console.log(`[CAPTURE] Color analysis: ${blackPercent}% black, ${whitePercent}% white`);
-        
-        if (blackPercent < 10 || blackPercent > 90) {
-          console.log('[CAPTURE] ⚠️ Poor contrast - image too light or too dark for QR detection');
-        }
-        
-        alert(`No QR code detected after 4 attempts.\n\nFrame Analysis:\n- Dimensions: ${canvas.width}x${canvas.height}\n- Contrast: ${blackPercent}% black, ${whitePercent}% white\n\nFrame saved as 'scanner-frame.png'\nTry:\n1. Better lighting\n2. Hold QR code closer/farther\n3. Reduce reflection/glare\n4. Use test QR generator`);
-      }
-      
-    } catch (error) {
-      console.error('[CAPTURE] Capture error:', error);
-      alert('Capture failed: ' + error.message);
-    }
-  };
 
   const verifyQRCode = async (qrData) => {
+    console.log('[VERIFY] Starting verification process...');
+    console.log('[VERIFY] QR Data to verify:', qrData);
+    console.log('[VERIFY] Gate ID:', gateId);
+    console.log('[VERIFY] Device ID:', deviceId);
+    console.log('[VERIFY] Crew ID:', session?.user?.email);
+    
     setVerifying(true);
     try {
+      const payload = {
+        qrData,
+        gateId,
+        deviceId,
+        crewId: session?.user?.email,
+        scanTime: new Date().toISOString()
+      };
+      
+      console.log('[VERIFY] Sending payload:', payload);
+      
       const response = await fetch("/api/verify/qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          qrData,
-          gateId,
-          deviceId,
-          crewId: session?.user?.email,
-          scanTime: new Date().toISOString()
-        })
+        body: JSON.stringify(payload)
       });
 
+      console.log('[VERIFY] Response status:', response.status);
+      console.log('[VERIFY] Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[VERIFY] API Error Response:', errorText);
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
+      }
+
       const result = await response.json();
+      console.log('[VERIFY] API Result:', result);
       setLastResult(result);
       
       // Visual/audio feedback
       if (result.valid) {
-        // Success feedback
+        console.log('[VERIFY] ✅ Verification successful!');
         navigator.vibrate && navigator.vibrate([100, 50, 100]);
+        
         // Resume scanning after 5 seconds
         setTimeout(() => {
+          console.log('[VERIFY] Resuming scanning...');
           setCameraActive(true);
           setScanningStatus("scanning");
           startScanning();
         }, 5000);
       } else {
-        // Error feedback
+        console.log('[VERIFY] ❌ Verification failed:', result.error);
         navigator.vibrate && navigator.vibrate([200, 100, 200, 100, 200]);
+        
         // Resume scanning after 3 seconds
         setTimeout(() => {
+          console.log('[VERIFY] Resuming scanning after error...');
           setCameraActive(true);
           setScanningStatus("scanning");
           startScanning();
@@ -377,10 +261,18 @@ export default function ScannerPage() {
       }
 
     } catch (error) {
+      console.error('[VERIFY] Network/Parse Error:', error);
       setLastResult({
         valid: false,
-        error: "Network error - check connection"
+        error: `Verification failed: ${error.message}`
       });
+      
+      // Resume scanning after network error
+      setTimeout(() => {
+        setCameraActive(true);
+        setScanningStatus("scanning");
+        startScanning();
+      }, 3000);
     } finally {
       setVerifying(false);
     }
@@ -565,10 +457,6 @@ export default function ScannerPage() {
                       </span>
                     </div>
                     
-                    {/* Debug info */}
-                    <div className="absolute top-0 left-0 text-white text-xs bg-black/50 px-2 py-1 rounded">
-                      {videoRef.current ? `${Math.floor(videoRef.current.videoWidth)}x${Math.floor(videoRef.current.videoHeight)}` : "No video"}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -583,40 +471,12 @@ export default function ScannerPage() {
                     📷 Start Camera
                   </button>
                 ) : (
-                  <>
-                    <button
-                      onClick={stopCamera}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                    >
-                      ⏹️ Stop Camera
-                    </button>
-                    <button
-                      onClick={testQRDetection}
-                      className="px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm"
-                    >
-                      🧪 Test
-                    </button>
-                    <button
-                      onClick={handleCapture}
-                      className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
-                    >
-                      📸 Capture
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Test with simple text QR
-                        const testQR = "Test QR Code from UBERNOIZE Scanner";
-                        setLastResult({
-                          valid: false,
-                          error: `Scanner Test - Try scanning this text: "${testQR}"`
-                        });
-                        console.log('[TEST-QR] Generated test message:', testQR);
-                      }}
-                      className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm"
-                    >
-                      📝 Test QR
-                    </button>
-                  </>
+                  <button
+                    onClick={stopCamera}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    ⏹️ Stop Camera
+                  </button>
                 )}
               </div>
             </div>
@@ -628,15 +488,9 @@ export default function ScannerPage() {
                   : "Tekan tombol untuk mengaktifkan kamera"
                 }
               </p>
-              {cameraActive && (
-                <div className="text-xs text-gray-500 space-y-1">
-                  <p>Debug Info:</p>
-                  <p>Video: {videoRef.current?.videoWidth || 0}x{videoRef.current?.videoHeight || 0}</p>
-                  <p>Ready State: {videoRef.current?.readyState || 'N/A'}</p>
-                  <p>Scanning: {scanningStatus || 'idle'}</p>
-                  <p>Canvas: {canvasRef.current?.width || 0}x{canvasRef.current?.height || 0}</p>
-                </div>
-              )}
+              <div className="text-xs text-gray-500">
+                Tips: Posisikan QR code dengan jelas, jarak 15-30cm
+              </div>
             </div>
           </div>
         )}
