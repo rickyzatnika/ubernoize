@@ -335,5 +335,33 @@ Rencana Tahap Berikutnya (opsi)
   - Quality assessment guidelines untuk optimal QR positioning
   - Systematic debugging approach untuk detection failures
 
+21) Scanner UX Fix - Dari Manual Debug ke Automatic Scanning
+- Major UX improvement untuk mengatasi scanner yang tidak otomatis seperti QR scanner profesional
+- Identifikasi masalah: Scanner memerlukan manual capture button instead of continuous automatic detection
+- Root cause analysis: Scanning logic menggunakan setInterval dengan frequency rendah (200ms) dan tidak optimal
+- Perbaikan fundamental architecture:
+  - Mengganti setInterval dengan requestAnimationFrame untuk 60fps continuous scanning
+  - Automatic real-time detection tanpa manual intervention
+  - Smart pause/resume logic untuk mencegah multiple detection spam
+  - Professional scanner behavior dengan instant feedback dan auto-resume
+- Enhanced detection flow:
+  - Continuous scanning starts immediately setelah camera ready
+  - Instant QR detection dan processing saat QR code masuk frame
+  - Automatic pause setelah detection (prevent spam detection)
+  - Smart resume timing: 5 detik untuk valid results, 3 detik untuk errors
+- Improved user experience:
+  - Eliminasi kebutuhan manual capture button untuk normal operation
+  - Point-and-scan behavior seperti scanner QR profesional lainnya
+  - Visual status feedback dengan real-time scanning indicators
+  - Haptic feedback untuk confirmation tanpa visual dependency
+- Backward compatibility:
+  - Debug tools (📸 Capture, 🧪 Test, 📝 Test QR) tetap tersedia untuk troubleshooting
+  - Manual frame analysis capabilities maintained untuk advanced debugging
+  - Console logging system retained untuk development troubleshooting
+- Detection versatility:
+  - Support untuk JSON UBERNOIZE QR codes (ticket verification)
+  - Support untuk simple text QR codes (testing dan general use)
+  - Graceful handling untuk various QR formats dengan appropriate user feedback
+
 Disiapkan oleh: Rovo Dev (Agent)
 Tanggal: [isi sesuai tanggal run]

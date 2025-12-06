@@ -82,17 +82,13 @@ export default function ScannerPage() {
   };
 
   const stopCamera = () => {
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
+    setCameraActive(false);
+    setScanningStatus("");
     
     if (videoRef.current?.srcObject) {
       const tracks = videoRef.current.srcObject.getTracks();
       tracks.forEach(track => track.stop());
       videoRef.current.srcObject = null;
-      setCameraActive(false);
-      setScanningStatus("");
     }
   };
 
@@ -136,45 +132,41 @@ export default function ScannerPage() {
       if (qrCode) {
         console.log('[SCANNER] ✅ QR Code detected!');
         console.log('[SCANNER] QR Data:', qrCode.data);
-        console.log('[SCANNER] QR Location:', qrCode.location);
         setScanningStatus("found");
         
         // Stop scanning temporarily to prevent multiple detections
-        if (scanIntervalRef.current) {
-          clearInterval(scanIntervalRef.current);
-          scanIntervalRef.current = null;
-        }
+        setCameraActive(false);
         
-        // Process the QR code data
+        // Process the QR code data immediately
         try {
           const qrData = JSON.parse(qrCode.data);
-          console.log('[SCANNER] Parsed QR data:', qrData);
+          console.log('[SCANNER] Valid JSON QR data:', qrData);
           verifyQRCode(qrData);
         } catch (parseError) {
-          console.error('[SCANNER] Failed to parse QR data:', parseError);
-          console.log('[SCANNER] Raw QR data was:', qrCode.data);
+          console.log('[SCANNER] Non-JSON QR data, treating as text:', qrCode.data);
           
-          // Try to handle it as raw string (for testing)
+          // For simple text QR codes, show detected message
           setLastResult({
-            valid: false,
-            error: `QR detected but invalid format: ${qrCode.data.substring(0, 50)}...`
+            valid: true,
+            message: `QR Code Detected: ${qrCode.data}`,
+            ticket: {
+              customerName: "QR Content",
+              eventName: qrCode.data.substring(0, 50),
+              ticketTypes: [{type: "Text QR", quantity: 1}],
+              totalAmount: 0
+            }
           });
           
-          // Resume scanning after error
+          // Resume scanning after 3 seconds
           setTimeout(() => {
-            if (cameraActive) {
-              startScanning();
-            }
+            setCameraActive(true);
+            setScanningStatus("scanning");
+            startScanning();
           }, 3000);
         }
       } else {
-        // No QR code found in this frame
+        // No QR code found - keep scanning
         setScanningStatus("scanning");
-        
-        // Log scanning attempts every 50 frames (10 seconds at 200ms intervals)
-        if (Math.random() < 0.02) { // 2% chance to log
-          console.log('[SCANNER] Still scanning... Video ready:', video.readyState === video.HAVE_ENOUGH_DATA);
-        }
       }
     } catch (error) {
       console.error('[SCANNER] QR detection error:', error);
@@ -187,14 +179,21 @@ export default function ScannerPage() {
       clearInterval(scanIntervalRef.current);
     }
     
-    console.log('[SCANNER] Starting scan interval...');
+    console.log('[SCANNER] Starting continuous scan...');
     setScanningStatus("scanning");
-    scanIntervalRef.current = setInterval(() => {
-      scanQRCode();
-    }, 200); // Scan every 200ms (reduced frequency for stability)
     
-    // Also do an immediate scan
-    setTimeout(() => scanQRCode(), 100);
+    // Use requestAnimationFrame for optimal performance
+    const continuousScan = () => {
+      if (cameraActive && videoRef.current && canvasRef.current) {
+        scanQRCode();
+        if (cameraActive) {
+          requestAnimationFrame(continuousScan);
+        }
+      }
+    };
+    
+    // Start continuous scanning
+    requestAnimationFrame(continuousScan);
   };
 
   // Test function to simulate QR detection
@@ -360,21 +359,21 @@ export default function ScannerPage() {
       if (result.valid) {
         // Success feedback
         navigator.vibrate && navigator.vibrate([100, 50, 100]);
-        // Resume scanning after 3 seconds
+        // Resume scanning after 5 seconds
         setTimeout(() => {
-          if (cameraActive) {
-            startScanning();
-          }
-        }, 3000);
+          setCameraActive(true);
+          setScanningStatus("scanning");
+          startScanning();
+        }, 5000);
       } else {
         // Error feedback
         navigator.vibrate && navigator.vibrate([200, 100, 200, 100, 200]);
-        // Resume scanning after error display
+        // Resume scanning after 3 seconds
         setTimeout(() => {
-          if (cameraActive) {
-            startScanning();
-          }
-        }, 2000);
+          setCameraActive(true);
+          setScanningStatus("scanning");
+          startScanning();
+        }, 3000);
       }
 
     } catch (error) {
