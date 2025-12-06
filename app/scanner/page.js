@@ -128,9 +128,9 @@ export default function ScannerPage() {
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     
     try {
-      // Use jsQR to detect QR code
-      const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "dontInvert",
+      // Use jsQR to detect QR code with multiple attempts
+      let qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "attemptBoth",
       });
 
       if (qrCode) {
@@ -251,24 +251,54 @@ export default function ScannerPage() {
       const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
       console.log('[CAPTURE] Image data length:', imageData.data.length);
       
-      // Try to detect QR in this frame manually
-      try {
-        const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: "dontInvert",
-        });
-        
-        console.log('[CAPTURE] Manual QR detection result:', qrCode ? 'FOUND ✅' : 'NOT FOUND ❌');
-        
-        if (qrCode) {
-          console.log('[CAPTURE] QR Data:', qrCode.data);
-          console.log('[CAPTURE] QR Location:', qrCode.location);
-          alert(`QR Code Found!\nData: ${qrCode.data.substring(0, 100)}...`);
-        } else {
-          alert('No QR code detected in current frame');
+      // Try to detect QR with different settings
+      let qrFound = false;
+      const detectionSettings = [
+        { inversionAttempts: "dontInvert" },
+        { inversionAttempts: "onlyInvert" },
+        { inversionAttempts: "attemptBoth" },
+        { inversionAttempts: "attemptBoth", debug: true }
+      ];
+      
+      console.log('[CAPTURE] Trying different QR detection settings...');
+      
+      for (let i = 0; i < detectionSettings.length && !qrFound; i++) {
+        try {
+          const settings = detectionSettings[i];
+          console.log(`[CAPTURE] Attempt ${i + 1} with settings:`, settings);
+          
+          const qrCode = jsQR(imageData.data, imageData.width, imageData.height, settings);
+          
+          if (qrCode) {
+            console.log(`[CAPTURE] SUCCESS on attempt ${i + 1}! ✅`);
+            console.log('[CAPTURE] QR Data:', qrCode.data);
+            console.log('[CAPTURE] QR Location:', qrCode.location);
+            alert(`QR Code Found! (Attempt ${i + 1})\nData: ${qrCode.data.substring(0, 100)}...`);
+            qrFound = true;
+            break;
+          } else {
+            console.log(`[CAPTURE] Attempt ${i + 1}: NOT FOUND`);
+          }
+        } catch (qrError) {
+          console.error(`[CAPTURE] Attempt ${i + 1} error:`, qrError);
         }
-      } catch (qrError) {
-        console.error('[CAPTURE] QR detection error:', qrError);
-        alert('Error during QR detection: ' + qrError.message);
+      }
+      
+      if (!qrFound) {
+        // Generate frame snapshot for visual inspection
+        const dataURL = canvas.toDataURL('image/png');
+        console.log('[CAPTURE] All attempts failed. Frame captured for inspection:');
+        console.log('[CAPTURE] Frame data URL (copy to browser):', dataURL.substring(0, 100) + '...');
+        
+        // Create download link for inspection
+        const link = document.createElement('a');
+        link.download = 'scanner-frame.png';
+        link.href = dataURL;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert(`No QR code detected after 4 attempts.\nFrame saved as 'scanner-frame.png' for inspection.\nCheck console for data URL.`);
       }
       
     } catch (error) {
