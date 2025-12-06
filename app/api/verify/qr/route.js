@@ -86,11 +86,21 @@ export async function POST(req) {
       console.log(`[GATE-SCAN-FAILED] ${JSON.stringify(failedLog)}`);
       
       // Send to dashboard logs
-      fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/admin/scan-logs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(failedLog)
-      }).catch(err => console.error('Failed to log scan:', err));
+      try {
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        const logUrl = `${baseUrl}/api/admin/scan-logs`;
+        console.log('[API-VERIFY] Sending failed scan log to:', logUrl);
+        
+        await fetch(logUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(failedLog)
+        });
+        
+        console.log('[API-VERIFY] Failed scan logged successfully');
+      } catch (logError) {
+        console.error('[API-VERIFY] Failed to log failed scan:', logError);
+      }
       
       return NextResponse.json({
         valid: false,
@@ -167,15 +177,31 @@ export async function POST(req) {
     
     // Send to dashboard logs (fire and forget)
     console.log('[API-VERIFY] Sending to dashboard logs...');
-    fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/admin/scan-logs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(auditLog)
-    }).then(response => {
-      console.log('[API-VERIFY] Dashboard log response:', response.status);
-    }).catch(err => {
-      console.error('[API-VERIFY] Failed to log scan:', err);
-    });
+    console.log('[API-VERIFY] Audit log data:', auditLog);
+    
+    try {
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+      const logUrl = `${baseUrl}/api/admin/scan-logs`;
+      console.log('[API-VERIFY] Posting to:', logUrl);
+      
+      const logResponse = await fetch(logUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(auditLog)
+      });
+      
+      console.log('[API-VERIFY] Dashboard log response:', logResponse.status);
+      
+      if (!logResponse.ok) {
+        const errorText = await logResponse.text();
+        console.error('[API-VERIFY] Dashboard log error:', errorText);
+      } else {
+        const logResult = await logResponse.json();
+        console.log('[API-VERIFY] Dashboard log success:', logResult);
+      }
+    } catch (logError) {
+      console.error('[API-VERIFY] Failed to send log to dashboard:', logError);
+    }
 
     // Return success with ticket details
     console.log('[API-VERIFY] ✅ VERIFICATION SUCCESS - returning valid ticket');

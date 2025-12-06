@@ -77,39 +77,63 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
+    console.log('[SCAN-LOGS-API] ========== RECEIVING LOG ==========');
+    
     const session = await getServerSession(authOptions);
+    console.log('[SCAN-LOGS-API] Session check:', session?.user?.email ? 'VALID' : 'INVALID');
+    
     if (!session?.user?.email) {
+      console.log('[SCAN-LOGS-API] No session - returning 401');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     await connectToDatabase();
     const user = await User.findOne({ email: session.user.email });
+    console.log('[SCAN-LOGS-API] User lookup:', user?.email, 'Role:', user?.role);
+    
     if (!user || user.role !== "admin") {
+      console.log('[SCAN-LOGS-API] Access denied - not admin');
       return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
     const body = await req.json();
+    console.log('[SCAN-LOGS-API] Received body:', body);
+    
     const logEntry = {
       id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date().toISOString(),
       ...body
     };
 
+    console.log('[SCAN-LOGS-API] Created log entry:', logEntry);
+
     // Add to logs array
     scanLogs.unshift(logEntry);
+    console.log('[SCAN-LOGS-API] Added to logs array. Total logs:', scanLogs.length);
     
     // Keep only recent logs to prevent memory issues
     if (scanLogs.length > MAX_LOGS) {
       scanLogs = scanLogs.slice(0, MAX_LOGS);
+      console.log('[SCAN-LOGS-API] Trimmed logs to MAX_LOGS:', MAX_LOGS);
     }
 
     console.log(`[SCAN-LOG-STORED] ${JSON.stringify(logEntry)}`);
+    console.log('[SCAN-LOGS-API] ========== LOG STORED SUCCESSFULLY ==========');
 
-    return NextResponse.json({ success: true, logId: logEntry.id });
+    return NextResponse.json({ 
+      success: true, 
+      logId: logEntry.id,
+      totalLogs: scanLogs.length,
+      message: "Scan log stored successfully"
+    });
 
   } catch (error) {
-    console.error("Store scan log error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("[SCAN-LOGS-API] Store scan log error:", error);
+    console.error("[SCAN-LOGS-API] Error stack:", error.stack);
+    return NextResponse.json({ 
+      error: "Internal server error",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    }, { status: 500 });
   }
 }
 

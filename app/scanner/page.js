@@ -124,10 +124,21 @@ export default function ScannerPage() {
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     
     try {
-      // Use jsQR to detect QR code with multiple attempts
-      let qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "attemptBoth",
-      });
+      // More aggressive QR detection with multiple strategies
+      let qrCode = null;
+      
+      // Try multiple detection strategies for better responsiveness
+      const strategies = [
+        { inversionAttempts: "attemptBoth" },
+        { inversionAttempts: "attemptBoth", debug: true },
+        { inversionAttempts: "onlyInvert" },
+        { inversionAttempts: "dontInvert" }
+      ];
+      
+      for (const strategy of strategies) {
+        qrCode = jsQR(imageData.data, imageData.width, imageData.height, strategy);
+        if (qrCode) break;
+      }
 
       if (qrCode) {
         console.log('[SCANNER] ✅ QR Code detected!');
@@ -179,21 +190,28 @@ export default function ScannerPage() {
       clearInterval(scanIntervalRef.current);
     }
     
-    console.log('[SCANNER] Starting continuous scan...');
+    console.log('[SCANNER] Starting aggressive continuous scan...');
     setScanningStatus("scanning");
     
-    // Use requestAnimationFrame for optimal performance
-    const continuousScan = () => {
+    // More aggressive scanning with both requestAnimationFrame AND interval
+    const aggressiveScan = () => {
       if (cameraActive && videoRef.current && canvasRef.current) {
         scanQRCode();
         if (cameraActive) {
-          requestAnimationFrame(continuousScan);
+          requestAnimationFrame(aggressiveScan);
         }
       }
     };
     
-    // Start continuous scanning
-    requestAnimationFrame(continuousScan);
+    // Additional interval-based scanning for redundancy
+    scanIntervalRef.current = setInterval(() => {
+      if (cameraActive) {
+        scanQRCode();
+      }
+    }, 50); // Very frequent scanning every 50ms
+    
+    // Start both scanning methods
+    requestAnimationFrame(aggressiveScan);
   };
 
 
@@ -584,6 +602,47 @@ export default function ScannerPage() {
               <div className="text-xs text-gray-500">
                 Tips: Posisikan QR code dengan jelas, jarak 15-30cm
               </div>
+              
+              {/* Test logging button */}
+              <button
+                onClick={async () => {
+                  console.log('[TEST-LOG] Testing manual log to dashboard...');
+                  try {
+                    const testLog = {
+                      orderId: "TEST-" + Date.now(),
+                      eventId: "TEST-EVENT",
+                      eventName: "Test Event dari Scanner",
+                      crewEmail: session?.user?.email,
+                      crewId: session?.user?.email,
+                      gateId: gateId,
+                      deviceId: deviceId,
+                      scanTime: new Date().toISOString(),
+                      verificationResult: 'VALID',
+                      customerEmail: 'test@customer.com',
+                      customerName: 'Test Customer',
+                      timestamp: new Date().toISOString()
+                    };
+                    
+                    const response = await fetch('/api/admin/scan-logs', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(testLog)
+                    });
+                    
+                    console.log('[TEST-LOG] Response status:', response.status);
+                    const result = await response.json();
+                    console.log('[TEST-LOG] Response:', result);
+                    
+                    alert(`Test log result: ${response.ok ? 'SUCCESS' : 'FAILED'}\nCheck admin dashboard!`);
+                  } catch (error) {
+                    console.error('[TEST-LOG] Error:', error);
+                    alert('Test log failed: ' + error.message);
+                  }
+                }}
+                className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+              >
+                🧪 Test Log to Dashboard
+              </button>
             </div>
           </div>
         )}
@@ -638,47 +697,84 @@ export default function ScannerPage() {
         {/* Verification Result */}
         {lastResult && (
           <div className="p-4 border-t">
-            <div className={`p-4 rounded-lg ${
+            <div className={`p-6 rounded-lg ${
               lastResult.valid 
-                ? "bg-green-50 border border-green-200" 
-                : "bg-red-50 border border-red-200"
+                ? "bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-300" 
+                : "bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300"
             }`}>
-              <div className="flex items-center gap-3 mb-3">
-                <div className={`text-2xl ${lastResult.valid ? "text-green-600" : "text-red-600"}`}>
+              {/* Large Visual Indicator */}
+              <div className="text-center mb-4">
+                <div className={`text-8xl mb-2 ${lastResult.valid ? "text-green-500" : "text-red-500"}`}>
                   {lastResult.valid ? "✅" : "❌"}
                 </div>
-                <div>
-                  <div className={`font-bold ${lastResult.valid ? "text-green-800" : "text-red-800"}`}>
-                    {lastResult.valid ? "VALID TICKET" : "INVALID TICKET"}
-                  </div>
-                  <div className={`text-sm ${lastResult.valid ? "text-green-600" : "text-red-600"}`}>
-                    {lastResult.message || lastResult.error}
-                  </div>
+                <div className={`text-2xl font-black uppercase tracking-wide ${
+                  lastResult.valid ? "text-green-800" : "text-red-800"
+                }`}>
+                  {lastResult.valid ? "🎫 TIKET VALID" : "⚠️ TIKET TIDAK VALID"}
+                </div>
+                <div className={`text-lg font-semibold mt-2 ${
+                  lastResult.valid ? "text-green-700" : "text-red-700"
+                }`}>
+                  {lastResult.valid ? "BOLEH MASUK" : "AKSES DITOLAK"}
+                </div>
+              </div>
+
+              {/* Security Status */}
+              <div className={`text-center p-3 rounded-lg mb-4 ${
+                lastResult.valid 
+                  ? "bg-green-200 text-green-900"
+                  : "bg-red-200 text-red-900"
+              }`}>
+                <div className="font-bold">
+                  {lastResult.valid 
+                    ? "🔒 TIKET ASLI TERVERIFIKASI - Signature Digital Valid"
+                    : "⚠️ TIKET PALSU ATAU TIDAK VALID"
+                  }
+                </div>
+                <div className="text-sm mt-1">
+                  {lastResult.valid
+                    ? "Tiket ini memiliki tanda tangan digital yang sah"
+                    : lastResult.message || lastResult.error
+                  }
                 </div>
               </div>
 
               {lastResult.valid && lastResult.ticket && (
-                <div className="space-y-2 text-sm">
+                <div className="bg-white p-4 rounded-lg space-y-3 text-sm border border-green-200">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="font-medium text-gray-700">Customer:</span>
-                      <p className="text-gray-900">{lastResult.ticket.customerName}</p>
+                      <span className="font-bold text-gray-700">Customer:</span>
+                      <p className="text-gray-900 font-medium">{lastResult.ticket.customerName}</p>
                     </div>
                     <div>
-                      <span className="font-medium text-gray-700">Event:</span>
-                      <p className="text-gray-900">{lastResult.ticket.eventName}</p>
+                      <span className="font-bold text-gray-700">Event:</span>
+                      <p className="text-gray-900 font-medium">{lastResult.ticket.eventName}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="font-medium text-gray-700">Tickets:</span>
+                      <span className="font-bold text-gray-700">Tiket:</span>
                       {lastResult.ticket.ticketTypes?.map((tt, idx) => (
-                        <p key={idx} className="text-gray-900">{tt.type} x{tt.quantity}</p>
+                        <p key={idx} className="text-gray-900 font-medium">{tt.type} x{tt.quantity}</p>
                       ))}
                     </div>
                     <div>
-                      <span className="font-medium text-gray-700">Total:</span>
-                      <p className="text-gray-900 font-bold">Rp {lastResult.ticket.totalAmount?.toLocaleString()}</p>
+                      <span className="font-bold text-gray-700">Total Bayar:</span>
+                      <p className="text-gray-900 font-bold text-lg">Rp {lastResult.ticket.totalAmount?.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Verification Details */}
+                  <div className="border-t pt-3 mt-3">
+                    <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
+                      <div>
+                        <span className="font-medium">Verified At:</span>
+                        <p>{lastResult.ticket.verifiedAt ? new Date(lastResult.ticket.verifiedAt).toLocaleString('id-ID') : 'Just now'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium">Gate:</span>
+                        <p>{lastResult.ticket.gateInfo?.gateId || gateId}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -686,9 +782,13 @@ export default function ScannerPage() {
 
               <button
                 onClick={clearResult}
-                className="w-full mt-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                className={`w-full mt-6 py-3 font-bold rounded-lg transition ${
+                  lastResult.valid
+                    ? "bg-green-600 text-white hover:bg-green-700"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                }`}
               >
-                📋 New Scan
+                📋 SCAN TIKET BERIKUTNYA
               </button>
             </div>
           </div>
