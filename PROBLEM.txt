@@ -1,0 +1,10 @@
+
+
+1. Scanner masih kurang aggresive/responsive membaca QR.
+2. Scanner Otomatis masih tidak berjalan alias harus menggunakan button capture untuk mendapatkan data dan mengirimkan data ke backend.
+3. Scanner saat ini masih dalam debuging, masih ada Button Test log to Dashboard untuk mengirimkan data ke backend, yang dimana seharusnya ketika scanner membaca QR langsung mengirimkan trigger ke backend admin.
+4. Pada bagian Manual Entry terlalu banyak form input yang harus diisi, seharusnya bisa di permudah agar validasi Ticket bisa lebih cepat Jika di masa depan ada trouble dengan scanner.
+
+#Masukkan Dari Saya :
+
+sebelum melakukan perubahan tolong buat backup nya terlebih dahulu, dan berikan komentar pada setiap kode yang dirubah.

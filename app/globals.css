@@ -1,4 +1,15 @@
 @import "tailwindcss";
 
+/* Minimal reset - hanya untuk body dan html */
+html {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
 
 

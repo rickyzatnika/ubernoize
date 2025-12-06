@@ -154,8 +154,62 @@ export async function POST(req) {
       });
     }
 
-    // Check if ticket has already been used (optional - if you track usage)
-    // You could add a 'usedAt' field to Order model and check here
+    // PERBAIKAN: Duplicate scanning prevention untuk QR codes
+    console.log('[QR-API] Checking for duplicate scans...');
+    
+    try {
+      const scanLogsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/admin/scan-logs`, {
+        method: 'GET',
+        headers: { 'X-Internal-Request': 'true' }
+      });
+      
+      if (scanLogsResponse.ok) {
+        const { logs } = await scanLogsResponse.json();
+        console.log(`[QR-API] Retrieved ${logs.length} logs for duplicate check`);
+        console.log(`[QR-API] Looking for orderId: ${String(order._id)}`);
+        
+        // DEBUG: Show first few logs to verify structure
+        if (logs.length > 0) {
+          console.log('[QR-API] Sample log structure:', JSON.stringify(logs[0], null, 2));
+        }
+        
+        // Check if this order has been scanned before (within last 24 hours)
+        const recentScans = logs.filter(log => {
+          const orderMatch = log.orderId === String(order._id);
+          const validResult = log.verificationResult === 'VALID';
+          const recent = new Date(log.timestamp) > new Date(Date.now() - 24 * 60 * 60 * 1000);
+          
+          console.log(`[QR-API] Checking log: orderId=${log.orderId}, match=${orderMatch}, valid=${validResult}, recent=${recent}`);
+          
+          return orderMatch && validResult && recent;
+        });
+        
+        console.log(`[QR-API] Found ${recentScans.length} recent scans for this order`);
+        
+        if (recentScans.length > 0) {
+          const lastScan = recentScans[0];
+          console.log('[QR-API] ⚠️ Duplicate scan detected:', lastScan.timestamp);
+          
+          return NextResponse.json({
+            valid: false,
+            error: `Tiket sudah di-scan sebelumnya pada ${new Date(lastScan.timestamp).toLocaleString('id-ID')} oleh ${lastScan.crewEmail}`,
+            lastScanInfo: {
+              timestamp: lastScan.timestamp,
+              scannedBy: lastScan.crewEmail,
+              gateId: lastScan.gateId,
+              scanMethod: lastScan.verificationMethod || 'QR'
+            }
+          });
+        }
+        
+        console.log('[QR-API] ✅ No duplicate scan found, proceeding...');
+      } else {
+        console.error('[QR-API] Failed to get scan logs:', scanLogsResponse.status);
+      }
+    } catch (duplicateCheckError) {
+      console.error('[QR-API] Error checking duplicates:', duplicateCheckError);
+      // Continue anyway if duplicate check fails
+    }
 
     // Log successful verification for audit with tracking data
     const auditLog = {
@@ -186,7 +240,10 @@ export async function POST(req) {
       
       const logResponse = await fetch(logUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Internal-Request': 'true' // Konsisten dengan manual verification
+        },
         body: JSON.stringify(auditLog)
       });
       

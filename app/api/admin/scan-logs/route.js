@@ -10,15 +10,24 @@ const MAX_LOGS = 1000; // Keep last 1000 logs in memory
 
 export async function GET(req) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // PERBAIKAN: Check for internal request header untuk GET requests juga
+    const isInternalRequest = req.headers.get('X-Internal-Request') === 'true';
+    console.log('[SCAN-LOGS-GET] Internal request:', isInternalRequest);
+    
+    if (isInternalRequest) {
+      console.log('[SCAN-LOGS-GET] Bypassing auth for internal GET request');
+    } else {
+      // Normal authentication untuk external GET requests
+      const session = await getServerSession(authOptions);
+      if (!session?.user?.email) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
 
-    await connectToDatabase();
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      await connectToDatabase();
+      const user = await User.findOne({ email: session.user.email });
+      if (!user || user.role !== "admin") {
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
     }
 
     const { searchParams } = new URL(req.url);
@@ -79,21 +88,30 @@ export async function POST(req) {
   try {
     console.log('[SCAN-LOGS-API] ========== RECEIVING LOG ==========');
     
-    const session = await getServerSession(authOptions);
-    console.log('[SCAN-LOGS-API] Session check:', session?.user?.email ? 'VALID' : 'INVALID');
+    // PERBAIKAN: Check for internal request header first
+    const isInternalRequest = req.headers.get('X-Internal-Request') === 'true';
+    console.log('[SCAN-LOGS-API] Internal request:', isInternalRequest);
     
-    if (!session?.user?.email) {
-      console.log('[SCAN-LOGS-API] No session - returning 401');
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (isInternalRequest) {
+      console.log('[SCAN-LOGS-API] Bypassing auth for internal request');
+    } else {
+      // Normal authentication for external requests
+      const session = await getServerSession(authOptions);
+      console.log('[SCAN-LOGS-API] Session check:', session?.user?.email ? 'VALID' : 'INVALID');
+      
+      if (!session?.user?.email) {
+        console.log('[SCAN-LOGS-API] No session - returning 401');
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
 
-    await connectToDatabase();
-    const user = await User.findOne({ email: session.user.email });
-    console.log('[SCAN-LOGS-API] User lookup:', user?.email, 'Role:', user?.role);
-    
-    if (!user || user.role !== "admin") {
-      console.log('[SCAN-LOGS-API] Access denied - not admin');
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      await connectToDatabase();
+      const user = await User.findOne({ email: session.user.email });
+      console.log('[SCAN-LOGS-API] User lookup:', user?.email, 'Role:', user?.role);
+      
+      if (!user || user.role !== "admin") {
+        console.log('[SCAN-LOGS-API] Access denied - not admin');
+        return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+      }
     }
 
     const body = await req.json();

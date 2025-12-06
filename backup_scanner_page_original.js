@@ -36,26 +36,8 @@ export default function ScannerPage() {
   // Redirect if not admin
   useEffect(() => {
     if (status === "loading") return;
-    
-    // DEBUG: Enhanced session logging untuk troubleshooting AKSES DITOLAK
-    console.log('[DEBUG-SESSION] Status:', status);
-    console.log('[DEBUG-SESSION] Session object:', JSON.stringify(session, null, 2));
-    console.log('[DEBUG-SESSION] User exists:', !!session?.user);
-    console.log('[DEBUG-SESSION] User role:', session?.user?.role);
-    console.log('[DEBUG-SESSION] User email:', session?.user?.email);
-    console.log('[DEBUG-SESSION] Is admin?:', session?.user?.role === "admin");
-    
     if (!session || session.user?.role !== "admin") {
-      console.log('[DEBUG-SESSION] REDIRECT TRIGGERED - Missing session or not admin');
-      console.log('[DEBUG-SESSION] Session exists:', !!session);
-      console.log('[DEBUG-SESSION] User object:', session?.user);
-      console.log('[DEBUG-SESSION] Current role value:', `"${session?.user?.role}"`);
-      console.log('[DEBUG-SESSION] Role type:', typeof session?.user?.role);
-      
-      // PERBAIKAN: Restore proper authentication (temporary bypass removed)
       router.push("/signin");
-    } else {
-      console.log('[DEBUG-SESSION] ACCESS GRANTED - User is admin');
     }
   }, [session, status, router]);
 
@@ -163,32 +145,35 @@ export default function ScannerPage() {
         console.log('[SCANNER] QR Data:', qrCode.data);
         setScanningStatus("found");
         
-        // PERBAIKAN 2 & 3: Otomatis langsung kirim ke backend tanpa tombol capture
         // Stop scanning temporarily to prevent multiple detections
         setCameraActive(false);
         
-        // PERBAIKAN: Langsung proses dan kirim ke backend otomatis
+        // Process the QR code data immediately
         try {
           const qrData = JSON.parse(qrCode.data);
           console.log('[SCANNER] Valid JSON QR data:', qrData);
-          console.log('[SCANNER] 🚀 OTOMATIS mengirim ke backend...');
-          verifyQRCode(qrData); // Langsung kirim ke backend tanpa user intervention
+          verifyQRCode(qrData);
         } catch (parseError) {
           console.log('[SCANNER] Non-JSON QR data, treating as text:', qrCode.data);
           
-          // PERBAIKAN: Untuk non-JSON QR, tetap tampilkan hasil tapi otomatis lanjut scan
+          // For simple text QR codes, show detected message
           setLastResult({
-            valid: false,
-            message: `QR Code format tidak valid: ${qrCode.data.substring(0, 50)}`,
-            error: "QR Code bukan format tiket UBERNOIZE"
+            valid: true,
+            message: `QR Code Detected: ${qrCode.data}`,
+            ticket: {
+              customerName: "QR Content",
+              eventName: qrCode.data.substring(0, 50),
+              ticketTypes: [{type: "Text QR", quantity: 1}],
+              totalAmount: 0
+            }
           });
           
-          // PERBAIKAN: Resume scanning lebih cepat untuk efisiensi
+          // Resume scanning after 3 seconds
           setTimeout(() => {
             setCameraActive(true);
             setScanningStatus("scanning");
             startScanning();
-          }, 2000); // Dikurangi dari 3 detik ke 2 detik
+          }, 3000);
         }
       } else {
         // No QR code found - keep scanning
@@ -200,48 +185,33 @@ export default function ScannerPage() {
     }
   };
 
-  // PERBAIKAN 1 & 2: Scanner yang lebih agresif dan responsive dengan otomatis scanning
   const startScanning = () => {
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current);
     }
     
-    console.log('[SCANNER] Starting ultra-aggressive continuous scan...');
+    console.log('[SCANNER] Starting aggressive continuous scan...');
     setScanningStatus("scanning");
     
-    // PERBAIKAN: Triple scanning approach untuk responsivitas maksimal
-    // 1. RequestAnimationFrame untuk real-time scanning
-    const ultraAggressiveScan = () => {
+    // More aggressive scanning with both requestAnimationFrame AND interval
+    const aggressiveScan = () => {
       if (cameraActive && videoRef.current && canvasRef.current) {
         scanQRCode();
         if (cameraActive) {
-          requestAnimationFrame(ultraAggressiveScan);
+          requestAnimationFrame(aggressiveScan);
         }
       }
     };
     
-    // 2. High frequency interval scanning untuk backup
+    // Additional interval-based scanning for redundancy
     scanIntervalRef.current = setInterval(() => {
       if (cameraActive) {
         scanQRCode();
       }
-    }, 25); // PERBAIKAN: Meningkatkan dari 50ms ke 25ms untuk lebih responsive
+    }, 50); // Very frequent scanning every 50ms
     
-    // 3. Additional timeout scanning untuk edge cases
-    const timeoutScan = () => {
-      if (cameraActive) {
-        setTimeout(() => {
-          scanQRCode();
-          if (cameraActive) {
-            timeoutScan(); // Recursive untuk continuous scanning
-          }
-        }, 10); // PERBAIKAN: Tambahan scanning setiap 10ms
-      }
-    };
-    
-    // PERBAIKAN: Start semua metode scanning untuk maksimal responsivitas
-    requestAnimationFrame(ultraAggressiveScan);
-    timeoutScan();
+    // Start both scanning methods
+    requestAnimationFrame(aggressiveScan);
   };
 
 
@@ -411,93 +381,35 @@ export default function ScannerPage() {
     }
   };
 
-  // PERBAIKAN 4: Manual verification dengan smart lookup berdasarkan verification code
   const verifyManualCode = async () => {
-    if (!manualCode) {
-      setLastResult({
-        valid: false,
-        error: "Harap masukkan kode verifikasi tiket"
-      });
-      return;
-    }
-
-    // PERBAIKAN: Validasi format kode verifikasi
-    if (manualCode.length !== 8) {
-      setLastResult({
-        valid: false,
-        error: "Kode verifikasi harus exactly 8 karakter"
-      });
+    if (!manualCode || !orderId || !eventId) {
+      alert("Harap isi semua field untuk verifikasi manual");
       return;
     }
 
     setVerifying(true);
     try {
-      // PERBAIKAN: Kirim request dengan smart lookup logic
-      const payload = {
-        verificationCode: manualCode,
-        gateId,
-        deviceId,
-        crewId: session?.user?.email,
-        scanTime: new Date().toISOString()
-      };
-
-      // PERBAIKAN: Hanya tambahkan Order ID dan Event ID jika diisi manual
-      if (orderId && orderId.trim()) {
-        payload.orderId = orderId.trim();
-      }
-      if (eventId && eventId.trim()) {
-        payload.eventId = eventId.trim();
-      }
-
-      console.log('[MANUAL-VERIFY] Sending payload:', payload);
-
       const response = await fetch("/api/verify/manual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          verificationCode: manualCode,
+          orderId,
+          eventId,
+          gateId,
+          deviceId,
+          crewId: session?.user?.email,
+          scanTime: new Date().toISOString()
+        })
       });
 
-      console.log('[MANUAL-VERIFY] Response status:', response.status);
-      console.log('[MANUAL-VERIFY] Response ok:', response.ok);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[MANUAL-VERIFY] Error response text:', errorText);
-        
-        // Parse error jika bisa, kalau tidak tampilkan text mentah
-        try {
-          const errorJson = JSON.parse(errorText);
-          setLastResult({
-            valid: false,
-            error: errorJson.error || errorText
-          });
-        } catch {
-          setLastResult({
-            valid: false,
-            error: `HTTP ${response.status}: ${errorText}`
-          });
-        }
-        return;
-      }
-
       const result = await response.json();
-      console.log('[MANUAL-VERIFY] Result:', result);
       setLastResult(result);
 
-      // PERBAIKAN: Auto-clear form jika verifikasi sukses
-      if (result.valid) {
-        setTimeout(() => {
-          setManualCode("");
-          setOrderId("");
-          setEventId("");
-        }, 5000);
-      }
-
     } catch (error) {
-      console.error('[MANUAL-VERIFY] Error:', error);
       setLastResult({
         valid: false,
-        error: "Network error - periksa koneksi internet"
+        error: "Network error - check connection"
       });
     } finally {
       setVerifying(false);
@@ -691,276 +603,196 @@ export default function ScannerPage() {
                 Tips: Posisikan QR code dengan jelas, jarak 15-30cm
               </div>
               
-              {/* PERBAIKAN 3: Hapus button test log yang seharusnya tidak ada di production */}
-              {/* Test log button telah dihapus - scanner sekarang otomatis mengirim ke backend */}
+              {/* Test logging button */}
+              <button
+                onClick={async () => {
+                  console.log('[TEST-LOG] Testing manual log to dashboard...');
+                  try {
+                    const testLog = {
+                      orderId: "TEST-" + Date.now(),
+                      eventId: "TEST-EVENT",
+                      eventName: "Test Event dari Scanner",
+                      crewEmail: session?.user?.email,
+                      crewId: session?.user?.email,
+                      gateId: gateId,
+                      deviceId: deviceId,
+                      scanTime: new Date().toISOString(),
+                      verificationResult: 'VALID',
+                      customerEmail: 'test@customer.com',
+                      customerName: 'Test Customer',
+                      timestamp: new Date().toISOString()
+                    };
+                    
+                    const response = await fetch('/api/admin/scan-logs', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(testLog)
+                    });
+                    
+                    console.log('[TEST-LOG] Response status:', response.status);
+                    const result = await response.json();
+                    console.log('[TEST-LOG] Response:', result);
+                    
+                    alert(`Test log result: ${response.ok ? 'SUCCESS' : 'FAILED'}\nCheck admin dashboard!`);
+                  } catch (error) {
+                    console.error('[TEST-LOG] Error:', error);
+                    alert('Test log failed: ' + error.message);
+                  }
+                }}
+                className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+              >
+                🧪 Test Log to Dashboard
+              </button>
             </div>
           </div>
         )}
 
-        {/* PERBAIKAN 4: Manual Entry Mode - Disederhanakan untuk validasi yang lebih cepat */}
+        {/* Manual Entry Mode */}
         {scanMode === "manual" && (
           <div className="p-4 space-y-4">
-            {/* PERBAIKAN: Hanya verification code yang wajib diinput manual */}
             <div>
-              <label className="block text-sm font-medium mb-1">🎫 Verification Code:</label>
+              <label className="block text-sm font-medium mb-1">Verification Code:</label>
               <input
                 type="text"
-                placeholder="Masukkan 8-digit kode dari tiket"
+                placeholder="8-digit code (e.g. A1B2C3D4)"
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-                className="w-full border-2 border-gray-300 rounded-lg p-4 font-mono tracking-wider text-center text-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                className="w-full border rounded-lg p-3 font-mono tracking-wider text-center"
                 maxLength={8}
-                autoFocus
               />
-              <div className="text-xs text-gray-500 mt-1 text-center">
-                Contoh: A1B2C3D4 • Cukup 8-digit saja, sistem akan otomatis cari order
-              </div>
             </div>
             
-            {/* PERBAIKAN: Order ID dan Event ID otomatis dicari berdasarkan verification code */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="text-sm text-blue-800">
-                🚀 <strong>Smart Lookup Aktif:</strong> Masukkan HANYA kode verifikasi 8-digit. 
-                Sistem akan otomatis scan semua tiket yang sudah diapprove untuk mencari yang cocok.
-                <br/>
-                <strong>Tidak perlu Order ID atau Event ID lagi!</strong>
-              </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Order ID:</label>
+              <input
+                type="text"
+                placeholder="Order ID"
+                value={orderId}
+                onChange={(e) => setOrderId(e.target.value)}
+                className="w-full border rounded-lg p-3 font-mono text-sm"
+              />
             </div>
-
-            {/* PERBAIKAN: Tambahan input opsional untuk kasus khusus */}
-            <details className="text-sm">
-              <summary className="cursor-pointer text-gray-600 hover:text-gray-800 font-medium">
-                🔧 Advanced Options (Opsional)
-              </summary>
-              <div className="mt-3 space-y-3 pl-4 border-l-2 border-gray-200">
-                <div>
-                  <label className="block text-xs font-medium mb-1 text-gray-600">Order ID (opsional):</label>
-                  <input
-                    type="text"
-                    placeholder="Kosongkan jika tidak tahu"
-                    value={orderId}
-                    onChange={(e) => setOrderId(e.target.value)}
-                    className="w-full border border-gray-300 rounded p-2 font-mono text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-medium mb-1 text-gray-600">Event ID (opsional):</label>
-                  <input
-                    type="text"
-                    placeholder="Kosongkan jika tidak tahu"
-                    value={eventId}
-                    onChange={(e) => setEventId(e.target.value)}
-                    className="w-full border border-gray-300 rounded p-2 font-mono text-sm"
-                  />
-                </div>
-              </div>
-            </details>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">Event ID:</label>
+              <input
+                type="text"
+                placeholder="Event ID"
+                value={eventId}
+                onChange={(e) => setEventId(e.target.value)}
+                className="w-full border rounded-lg p-3 font-mono text-sm"
+              />
+            </div>
 
             <button
               onClick={verifyManualCode}
-              disabled={verifying || !manualCode || manualCode.length !== 8}
-              className="w-full py-4 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-lg hover:from-gray-800 hover:to-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg shadow-lg"
+              disabled={verifying || !manualCode || !orderId || !eventId}
+              className="w-full py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {verifying ? "⏳ Memverifikasi..." : "🔍 VERIFIKASI TIKET"}
+              {verifying ? "Verifying..." : "🔍 Verify Ticket"}
             </button>
-            
-            {/* PERBAIKAN: Indikator validasi sederhana tanpa text yang mengganggu */}
-            {manualCode && manualCode.length !== 8 && (
-              <div className="text-center text-sm">
-                <span className="text-orange-600">⚠️ Kode harus 8 karakter</span>
-              </div>
-            )}
           </div>
         )}
 
-        {/* PERBAIKAN: Modal popup untuk mobile-friendly verification results */}
+        {/* Verification Result */}
         {lastResult && (
-          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div className={`w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden ${
-              lastResult.valid ? 'bg-white border-4 border-green-400' : 'bg-white border-4 border-red-400'
-            } max-h-[90vh] overflow-y-auto animate-scale-in`}>
-              
-              {/* Header dengan visual yang kuat */}
-              <div className={`p-8 text-center ${
-                lastResult.valid ? 'bg-gradient-to-b from-green-500 to-green-600' : 'bg-gradient-to-b from-red-500 to-red-600'
-              } text-white relative`}>
-                <div className={`text-8xl mb-3 animate-bounce-slow ${
-                  lastResult.valid ? '✅' : '❌'
-                }`}>
-                  {lastResult.valid ? '✅' : '❌'}
+          <div className="p-4 border-t">
+            <div className={`p-6 rounded-lg ${
+              lastResult.valid 
+                ? "bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-300" 
+                : "bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300"
+            }`}>
+              {/* Large Visual Indicator */}
+              <div className="text-center mb-4">
+                <div className={`text-8xl mb-2 ${lastResult.valid ? "text-green-500" : "text-red-500"}`}>
+                  {lastResult.valid ? "✅" : "❌"}
                 </div>
-                <h1 className="text-2xl font-black uppercase tracking-wide mb-2">
-                  {lastResult.valid ? 'TIKET VALID' : 'TIKET INVALID'}
-                </h1>
-                <p className="text-lg font-bold opacity-90">
-                  {lastResult.valid ? '🚪 BOLEH MASUK' : '🚫 AKSES DITOLAK'}
-                </p>
-                
-                {/* Decorative elements */}
-                <div className="absolute top-4 left-4 w-3 h-3 bg-white/30 rounded-full"></div>
-                <div className="absolute top-6 right-6 w-2 h-2 bg-white/40 rounded-full"></div>
-                <div className="absolute bottom-4 left-6 w-2 h-2 bg-white/20 rounded-full"></div>
+                <div className={`text-2xl font-black uppercase tracking-wide ${
+                  lastResult.valid ? "text-green-800" : "text-red-800"
+                }`}>
+                  {lastResult.valid ? "🎫 TIKET VALID" : "⚠️ TIKET TIDAK VALID"}
+                </div>
+                <div className={`text-lg font-semibold mt-2 ${
+                  lastResult.valid ? "text-green-700" : "text-red-700"
+                }`}>
+                  {lastResult.valid ? "BOLEH MASUK" : "AKSES DITOLAK"}
+                </div>
               </div>
 
-              {/* Content Area */}
-              <div className="p-6">
-                {/* Security Badge */}
-                <div className={`p-4 rounded-xl mb-6 text-center ${
-                  lastResult.valid 
-                    ? 'bg-green-50 border-2 border-green-200 text-green-900' 
-                    : 'bg-red-50 border-2 border-red-200 text-red-900'
-                }`}>
-                  <div className="font-bold text-lg mb-2">
-                    {lastResult.valid 
-                      ? '🔐 SIGNATURE DIGITAL VALID'
-                      : '⚠️ VERIFIKASI GAGAL'
-                    }
-                  </div>
-                  <div className="text-sm">
-                    {lastResult.valid
-                      ? 'Tiket ini asli dan terverifikasi'
-                      : lastResult.error || lastResult.message
-                    }
-                  </div>
-                </div>
-
-                {/* Ticket Details untuk valid tickets */}
-                {lastResult.valid && lastResult.ticket && (
-                  <div className="space-y-4 mb-6">
-                    {/* Customer Info */}
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex items-center mb-3">
-                        <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
-                        <h3 className="font-bold text-gray-800">👤 Customer</h3>
-                      </div>
-                      <p className="text-lg font-semibold text-gray-900 ml-6">
-                        {lastResult.ticket.customerName}
-                      </p>
-                    </div>
-
-                    {/* Event Info */}
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex items-center mb-3">
-                        <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
-                        <h3 className="font-bold text-gray-800">🎪 Event</h3>
-                      </div>
-                      <p className="text-lg font-semibold text-gray-900 ml-6">
-                        {lastResult.ticket.eventName}
-                      </p>
-                    </div>
-
-                    {/* Ticket Types */}
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex items-center mb-3">
-                        <div className="w-3 h-3 bg-orange-500 rounded-full mr-3"></div>
-                        <h3 className="font-bold text-gray-800">🎫 Tiket</h3>
-                      </div>
-                      <div className="ml-6 space-y-1">
-                        {lastResult.ticket.ticketTypes?.map((tt, idx) => (
-                          <p key={idx} className="text-gray-900 font-medium">
-                            {tt.type} × {tt.quantity}
-                          </p>
-                        ))}
-                        <p className="text-green-600 font-bold text-xl mt-2">
-                          💰 Rp {lastResult.ticket.totalAmount?.toLocaleString('id-ID')}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Gate Info */}
-                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-blue-800">🚪 Gate:</span>
-                          <p className="text-blue-900 font-bold">
-                            {lastResult.ticket.gateInfo?.gateId || gateId}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="font-medium text-blue-800">⏰ Waktu:</span>
-                          <p className="text-blue-900 font-bold text-xs">
-                            {new Date(lastResult.ticket.verifiedAt || Date.now()).toLocaleTimeString('id-ID')}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Error details untuk invalid tickets */}
-                {!lastResult.valid && lastResult.lastScanInfo && (
-                  <div className="bg-red-50 rounded-xl p-4 border border-red-200 mb-6">
-                    <h3 className="font-bold text-red-800 mb-3">📋 Info Scan Terakhir</h3>
-                    <div className="text-sm text-red-700 space-y-1">
-                      <p><strong>Waktu:</strong> {new Date(lastResult.lastScanInfo.timestamp).toLocaleString('id-ID')}</p>
-                      <p><strong>Oleh:</strong> {lastResult.lastScanInfo.scannedBy}</p>
-                      <p><strong>Gate:</strong> {lastResult.lastScanInfo.gateId}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Button */}
-              <div className="p-6 pt-0">
-                <button
-                  onClick={() => {
-                    setLastResult(null);
-                    if (scanMode === "qr" && !cameraActive) {
-                      setCameraActive(true);
-                      startScanning();
-                    } else if (scanMode === "manual") {
-                      setManualCode("");
-                      setOrderId("");
-                      setEventId("");
-                    }
-                  }}
-                  className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all duration-200 transform hover:scale-105 ${
-                    lastResult.valid 
-                      ? 'bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800' 
-                      : 'bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800'
-                  }`}
-                >
+              {/* Security Status */}
+              <div className={`text-center p-3 rounded-lg mb-4 ${
+                lastResult.valid 
+                  ? "bg-green-200 text-green-900"
+                  : "bg-red-200 text-red-900"
+              }`}>
+                <div className="font-bold">
                   {lastResult.valid 
-                    ? '✅ SCAN TIKET BERIKUTNYA' 
-                    : '🔄 COBA SCAN LAGI'
+                    ? "🔒 TIKET ASLI TERVERIFIKASI - Signature Digital Valid"
+                    : "⚠️ TIKET PALSU ATAU TIDAK VALID"
                   }
-                </button>
+                </div>
+                <div className="text-sm mt-1">
+                  {lastResult.valid
+                    ? "Tiket ini memiliki tanda tangan digital yang sah"
+                    : lastResult.message || lastResult.error
+                  }
+                </div>
               </div>
+
+              {lastResult.valid && lastResult.ticket && (
+                <div className="bg-white p-4 rounded-lg space-y-3 text-sm border border-green-200">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="font-bold text-gray-700">Customer:</span>
+                      <p className="text-gray-900 font-medium">{lastResult.ticket.customerName}</p>
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-700">Event:</span>
+                      <p className="text-gray-900 font-medium">{lastResult.ticket.eventName}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="font-bold text-gray-700">Tiket:</span>
+                      {lastResult.ticket.ticketTypes?.map((tt, idx) => (
+                        <p key={idx} className="text-gray-900 font-medium">{tt.type} x{tt.quantity}</p>
+                      ))}
+                    </div>
+                    <div>
+                      <span className="font-bold text-gray-700">Total Bayar:</span>
+                      <p className="text-gray-900 font-bold text-lg">Rp {lastResult.ticket.totalAmount?.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Verification Details */}
+                  <div className="border-t pt-3 mt-3">
+                    <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
+                      <div>
+                        <span className="font-medium">Verified At:</span>
+                        <p>{lastResult.ticket.verifiedAt ? new Date(lastResult.ticket.verifiedAt).toLocaleString('id-ID') : 'Just now'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium">Gate:</span>
+                        <p>{lastResult.ticket.gateInfo?.gateId || gateId}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={clearResult}
+                className={`w-full mt-6 py-3 font-bold rounded-lg transition ${
+                  lastResult.valid
+                    ? "bg-green-600 text-white hover:bg-green-700"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                }`}
+              >
+                📋 SCAN TIKET BERIKUTNYA
+              </button>
             </div>
           </div>
         )}
-        
-        {/* CSS untuk animasi */}
-        <style jsx>{`
-          @keyframes scale-in {
-            from {
-              opacity: 0;
-              transform: scale(0.8);
-            }
-            to {
-              opacity: 1;
-              transform: scale(1);
-            }
-          }
-          @keyframes bounce-slow {
-            0%, 20%, 50%, 80%, 100% {
-              transform: translateY(0);
-            }
-            40% {
-              transform: translateY(-10px);
-            }
-            60% {
-              transform: translateY(-5px);
-            }
-          }
-          .animate-scale-in {
-            animation: scale-in 0.3s ease-out;
-          }
-          .animate-bounce-slow {
-            animation: bounce-slow 2s infinite;
-          }
-        `}</style>
 
         {/* Footer */}
         <div className="p-4 text-center text-xs text-gray-500 border-t">
