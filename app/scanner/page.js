@@ -217,6 +217,66 @@ export default function ScannerPage() {
     });
   };
 
+  // Capture function for debugging
+  const handleCapture = () => {
+    console.log('[CAPTURE] Button clicked!');
+    
+    if (!videoRef.current || !canvasRef.current) {
+      console.log('[CAPTURE] Missing refs - video:', !!videoRef.current, 'canvas:', !!canvasRef.current);
+      alert('Missing video or canvas reference');
+      return;
+    }
+
+    try {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      const context = canvas.getContext("2d");
+      
+      console.log('[CAPTURE] Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+      console.log('[CAPTURE] Video ready state:', video.readyState);
+      
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.log('[CAPTURE] Video has no dimensions');
+        alert('Video not ready - dimensions are 0');
+        return;
+      }
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      console.log('[CAPTURE] Canvas updated with dimensions:', canvas.width, 'x', canvas.height);
+      
+      // Get image data for QR detection
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      console.log('[CAPTURE] Image data length:', imageData.data.length);
+      
+      // Try to detect QR in this frame manually
+      try {
+        const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "dontInvert",
+        });
+        
+        console.log('[CAPTURE] Manual QR detection result:', qrCode ? 'FOUND ✅' : 'NOT FOUND ❌');
+        
+        if (qrCode) {
+          console.log('[CAPTURE] QR Data:', qrCode.data);
+          console.log('[CAPTURE] QR Location:', qrCode.location);
+          alert(`QR Code Found!\nData: ${qrCode.data.substring(0, 100)}...`);
+        } else {
+          alert('No QR code detected in current frame');
+        }
+      } catch (qrError) {
+        console.error('[CAPTURE] QR detection error:', qrError);
+        alert('Error during QR detection: ' + qrError.message);
+      }
+      
+    } catch (error) {
+      console.error('[CAPTURE] Capture error:', error);
+      alert('Capture failed: ' + error.message);
+    }
+  };
+
   const verifyQRCode = async (qrData) => {
     setVerifying(true);
     try {
@@ -477,36 +537,7 @@ export default function ScannerPage() {
                       🧪 Test
                     </button>
                     <button
-                      onClick={() => {
-                        // Capture current frame and log it
-                        if (videoRef.current && canvasRef.current) {
-                          const canvas = canvasRef.current;
-                          const video = videoRef.current;
-                          const context = canvas.getContext("2d");
-                          
-                          canvas.width = video.videoWidth;
-                          canvas.height = video.videoHeight;
-                          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                          
-                          // Convert to data URL for inspection
-                          const dataURL = canvas.toDataURL('image/png');
-                          console.log('[DEBUG] Captured frame data URL length:', dataURL.length);
-                          console.log('[DEBUG] You can copy this URL to browser to see captured image');
-                          console.log('[DEBUG] Frame data URL:', dataURL.substring(0, 100) + '...');
-                          
-                          // Try to detect QR in this frame manually
-                          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                          try {
-                            const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
-                            console.log('[DEBUG] Manual QR detection result:', qrCode ? 'FOUND' : 'NOT FOUND');
-                            if (qrCode) {
-                              console.log('[DEBUG] QR Data:', qrCode.data);
-                            }
-                          } catch (e) {
-                            console.error('[DEBUG] Manual QR detection error:', e);
-                          }
-                        }
-                      }}
+                      onClick={handleCapture}
                       className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
                     >
                       📸 Capture
