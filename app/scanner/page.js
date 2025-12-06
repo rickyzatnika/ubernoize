@@ -197,6 +197,91 @@ export default function ScannerPage() {
   };
 
 
+  // Capture function for debugging
+  const handleCapture = () => {
+    console.log('[CAPTURE] Button clicked!');
+    
+    if (!videoRef.current || !canvasRef.current) {
+      console.log('[CAPTURE] Missing refs - video:', !!videoRef.current, 'canvas:', !!canvasRef.current);
+      alert('Missing video or canvas reference');
+      return;
+    }
+
+    try {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      const context = canvas.getContext("2d");
+      
+      console.log('[CAPTURE] Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+      console.log('[CAPTURE] Video ready state:', video.readyState);
+      
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.log('[CAPTURE] Video has no dimensions');
+        alert('Video not ready - dimensions are 0');
+        return;
+      }
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      console.log('[CAPTURE] Canvas updated with dimensions:', canvas.width, 'x', canvas.height);
+      
+      // Get image data for QR detection
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      console.log('[CAPTURE] Image data length:', imageData.data.length);
+      
+      // Try to detect QR with different settings
+      let qrFound = false;
+      const detectionSettings = [
+        { inversionAttempts: "dontInvert" },
+        { inversionAttempts: "onlyInvert" },
+        { inversionAttempts: "attemptBoth" },
+        { inversionAttempts: "attemptBoth", debug: true }
+      ];
+      
+      console.log('[CAPTURE] Trying different QR detection settings...');
+      
+      for (let i = 0; i < detectionSettings.length && !qrFound; i++) {
+        try {
+          const settings = detectionSettings[i];
+          console.log(`[CAPTURE] Attempt ${i + 1} with settings:`, settings);
+          
+          const qrCode = jsQR(imageData.data, imageData.width, imageData.height, settings);
+          
+          if (qrCode) {
+            console.log(`[CAPTURE] SUCCESS on attempt ${i + 1}! ✅`);
+            console.log('[CAPTURE] QR Data:', qrCode.data);
+            console.log('[CAPTURE] QR Location:', qrCode.location);
+            
+            // Process the captured QR immediately
+            try {
+              const qrData = JSON.parse(qrCode.data);
+              alert(`QR Code Found! (Attempt ${i + 1})\nProcessing verification...`);
+              verifyQRCode(qrData);
+            } catch (parseError) {
+              alert(`QR Code Found! (Attempt ${i + 1})\nData: ${qrCode.data.substring(0, 100)}...`);
+            }
+            qrFound = true;
+            break;
+          } else {
+            console.log(`[CAPTURE] Attempt ${i + 1}: NOT FOUND`);
+          }
+        } catch (qrError) {
+          console.error(`[CAPTURE] Attempt ${i + 1} error:`, qrError);
+        }
+      }
+      
+      if (!qrFound) {
+        alert(`No QR code detected after 4 attempts.\nTry:\n1. Better lighting\n2. Hold QR code closer/farther\n3. Reduce reflection/glare`);
+      }
+      
+    } catch (error) {
+      console.error('[CAPTURE] Capture error:', error);
+      alert('Capture failed: ' + error.message);
+    }
+  };
+
   const verifyQRCode = async (qrData) => {
     console.log('[VERIFY] Starting verification process...');
     console.log('[VERIFY] QR Data to verify:', qrData);
@@ -471,12 +556,20 @@ export default function ScannerPage() {
                     📷 Start Camera
                   </button>
                 ) : (
-                  <button
-                    onClick={stopCamera}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    ⏹️ Stop Camera
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={stopCamera}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                    >
+                      ⏹️ Stop Camera
+                    </button>
+                    <button
+                      onClick={handleCapture}
+                      className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+                    >
+                      📸 Capture
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
