@@ -183,5 +183,56 @@ Rencana Tahap Berikutnya (opsi)
   - Modal trigger dengan smooth state management
   - Real-time data integration via SWR
 
+14) Web-based Scanner Interface untuk Crew Gate
+- Halaman /scanner: interface scanner untuk crew gate dengan dual scan mode
+  - Mobile-first responsive design optimal untuk tablet/smartphone crew
+  - Camera scan mode: video stream integration dengan environment camera (back camera)
+  - Manual entry mode: 8-digit verification code + Order ID + Event ID input
+  - Gate selection dropdown (GATE_A1, GATE_A2, GATE_B1, GATE_B2) 
+  - Device tracking dengan unique device ID yang persistent via localStorage
+  - Real-time crew tracking dengan session integration
+- Enhanced API integration:
+  - Update /api/verify/qr dan /api/verify/manual untuk menerima tracking data
+  - Payload enhancement: gateId, deviceId, crewId, scanTime
+  - Comprehensive audit logging dengan structured JSON format
+  - Enhanced response dengan gate info dan verification details
+- Advanced scanner features:
+  - Visual/haptic feedback dengan navigator.vibrate untuk hasil scan
+  - Real-time verification dengan loading states dan error handling
+  - Rich result display dengan customer info dan ticket details
+  - Admin-only access dengan automatic redirect ke signin
+- Navbar integration: link "📱 Scanner" untuk admin di navbar
+
+15) Real-time Gate Monitor Dashboard
+- API /api/admin/scan-logs: endpoint untuk logging dan retrieving scan activities
+  - In-memory storage untuk 1000 recent logs (production-ready untuk Redis/Database)
+  - GET endpoint dengan filtering: gateId, status (VALID/INVALID), timeRange
+  - POST endpoint untuk menerima log dari verification APIs
+  - Dashboard statistics generation (total scans, success rate, activity breakdown)
+- Halaman /admin/dashboard: real-time monitoring interface
+  - Live monitoring dengan SWR refreshInterval 3 detik untuk near real-time updates
+  - Manual refresh button dengan mutate() untuk instant updates
+  - Statistics cards: Total Scans, Valid Tickets, Invalid Attempts, Success Rate
+  - Gate Activity chart dengan progress bars per gate
+  - Crew Activity monitoring dengan ranking aktivitas crew
+  - Advanced filtering: gate, status, time range dengan real-time updates
+  - Live scan logs table dengan timestamp, customer info, event details
+- Real-time logging integration:
+  - Auto-logging dari /api/verify/qr dan /api/verify/manual
+  - Fire-and-forget POST ke scan-logs endpoint
+  - Structured audit trail dengan comprehensive metadata
+- UI/UX enhancements:
+  - Live indicator dengan pulse animation
+  - Color-coded status badges (✅ VALID / ❌ INVALID)
+  - Mobile responsive untuk tablet monitoring
+  - Professional styling consistent dengan UBERNOIZE theme
+- Navigation integration: link "📊 Dashboard" di navbar dan admin page
+
+16) Security Update - Next.js CVE Fix
+- Update Next.js dari 15.2.5 ke ^15.2.6 untuk memperbaiki CVE-2025-66478
+- Security vulnerability patch untuk production deployment
+- Backward compatible update tanpa breaking changes
+- Vercel deployment fix untuk menghilangkan security warnings
+
 Disiapkan oleh: Rovo Dev (Agent)
 Tanggal: [isi sesuai tanggal run]
