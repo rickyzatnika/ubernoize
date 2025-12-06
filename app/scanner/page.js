@@ -298,7 +298,38 @@ export default function ScannerPage() {
         link.click();
         document.body.removeChild(link);
         
-        alert(`No QR code detected after 4 attempts.\nFrame saved as 'scanner-frame.png' for inspection.\nCheck console for data URL.`);
+        // Additional analysis
+        console.log('[CAPTURE] Image Analysis:');
+        console.log('- Canvas dimensions:', canvas.width, 'x', canvas.height);
+        console.log('- Image data length:', imageData.data.length);
+        console.log('- Bytes per pixel:', imageData.data.length / (canvas.width * canvas.height));
+        
+        // Check if image is mostly black/white (QR code should have high contrast)
+        let blackPixels = 0;
+        let whitePixels = 0;
+        const threshold = 128;
+        
+        for (let i = 0; i < imageData.data.length; i += 4) {
+          const r = imageData.data[i];
+          const g = imageData.data[i + 1];
+          const b = imageData.data[i + 2];
+          const gray = (r + g + b) / 3;
+          
+          if (gray < threshold) blackPixels++;
+          else whitePixels++;
+        }
+        
+        const totalPixels = canvas.width * canvas.height;
+        const blackPercent = (blackPixels / totalPixels * 100).toFixed(1);
+        const whitePercent = (whitePixels / totalPixels * 100).toFixed(1);
+        
+        console.log(`[CAPTURE] Color analysis: ${blackPercent}% black, ${whitePercent}% white`);
+        
+        if (blackPercent < 10 || blackPercent > 90) {
+          console.log('[CAPTURE] ⚠️ Poor contrast - image too light or too dark for QR detection');
+        }
+        
+        alert(`No QR code detected after 4 attempts.\n\nFrame Analysis:\n- Dimensions: ${canvas.width}x${canvas.height}\n- Contrast: ${blackPercent}% black, ${whitePercent}% white\n\nFrame saved as 'scanner-frame.png'\nTry:\n1. Better lighting\n2. Hold QR code closer/farther\n3. Reduce reflection/glare\n4. Use test QR generator`);
       }
       
     } catch (error) {
@@ -571,6 +602,20 @@ export default function ScannerPage() {
                       className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
                     >
                       📸 Capture
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Test with simple text QR
+                        const testQR = "Test QR Code from UBERNOIZE Scanner";
+                        setLastResult({
+                          valid: false,
+                          error: `Scanner Test - Try scanning this text: "${testQR}"`
+                        });
+                        console.log('[TEST-QR] Generated test message:', testQR);
+                      }}
+                      className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm"
+                    >
+                      📝 Test QR
                     </button>
                   </>
                 )}

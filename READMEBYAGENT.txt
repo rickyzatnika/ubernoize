@@ -310,5 +310,30 @@ Rencana Tahap Berikutnya (opsi)
   - Detailed console logs untuk step-by-step debugging process
   - Enhanced error messages dengan actionable information
 
+20) QR Scanner Advanced Detection & Frame Inspection
+- Enhanced QR detection algorithm dengan multiple attempt strategies
+- Multi-strategy QR detection system:
+  - Attempt 1: dontInvert (normal black-on-white QR codes)
+  - Attempt 2: onlyInvert (inverted white-on-black QR codes)  
+  - Attempt 3: attemptBoth (automatic inversion attempts)
+  - Attempt 4: attemptBoth + debug (detailed debugging mode)
+- Automatic frame capture dan inspection tools:
+  - Auto-download captured frame sebagai 'scanner-frame.png' untuk visual inspection
+  - Console data URL output untuk browser inspection
+  - Frame quality verification untuk troubleshooting detection issues
+- Enhanced debugging untuk capture button:
+  - Separated handleCapture function dengan robust error handling
+  - Detailed step-by-step logging untuk video dimensions, ready state, canvas processing
+  - Alert notifications untuk immediate user feedback
+  - Reference validation untuk video dan canvas elements
+- Improved continuous scanning algorithm:
+  - Updated auto-scanning untuk menggunakan 'attemptBoth' inversion strategy
+  - Better detection capability untuk various QR code conditions dan lighting
+- Troubleshooting workflow:
+  - Visual frame inspection melalui downloaded PNG file
+  - Console logging untuk detailed detection attempt results
+  - Quality assessment guidelines untuk optimal QR positioning
+  - Systematic debugging approach untuk detection failures
+
 Disiapkan oleh: Rovo Dev (Agent)
 Tanggal: [isi sesuai tanggal run]
